@@ -1,12 +1,12 @@
-import jax.numpy as np
-
+# import jax.numpy as np
+import numpy as np
 
 def ge_dist(Lpinv, x1, x2):
     dx = (x2 - x1)
     dm = np.einsum('...i,...i->...',dx.dot(Lpinv),dx)
     return np.sqrt(dm)
 
-@jit
+# @jit
 def laplacian(a):
     d = np.diag(a.sum(axis=0))
     return d - a
@@ -31,7 +31,7 @@ def lin_interp_array(X, T, t):
     
     return np.clip(X[idx0,...] + (t - T[idx0])*slope, a_min=0.)
 
-@jit 
+# @jit
 def df_dt(f, t, L, k):
     return k*np.matmul(-L,f[...,None]).squeeze(-1)
 #     return -k*L.dot(f)

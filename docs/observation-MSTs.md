@@ -125,8 +125,8 @@ tfidf = tfidf_model.fit_transform(cts)
 
 ```{code-cell} ipython3
 # G = nx.random_graphs.connected_watts_strogatz_graph(25, 4, 0.7)
-n, v = (30,50)
-B = nx.bipartite.random_graph(n, v, .1)
+n, v = (10,30)
+B = nx.bipartite.random_graph(n, v, .2)
 G=nx.bipartite.weighted_projected_graph(B, nodes=range(n))
 # nx.set_edge_attributes(G, values = 1, name = 'weight')
 nx.set_node_attributes(G, nx.pagerank(G), name='importance')
@@ -141,6 +141,23 @@ plt.spy(Bou.T@Bin+Bin.T@Bou)
 
 ```{code-cell} ipython3
 plt.spy(nx.to_numpy_array(G))
+```
+
+```{code-cell} ipython3
+B2=np.vstack((B1:=Bin - Bou,-B1))
+B1.T@B1
+```
+
+```{code-cell} ipython3
+B2.T@B2/2
+```
+
+```{code-cell} ipython3
+B1.mean(axis=0), B2.mean(axis=0)
+```
+
+```{code-cell} ipython3
+plt.imshow(np.cov(B2.T, bias=False))
 ```
 
 ```{code-cell} ipython3
@@ -269,47 +286,34 @@ plt.legend(bbox_to_anchor=(1,.7))
 # sprs.csgraph.shortest_path(
 ```
 
+![image.png](attachment:cc4fc1e5-0d20-450e-8ce0-9e428af935f2.png)
+
 ```{code-cell} ipython3
-T.toarray()
+# sns.heatmap(adata.varp['invL'])
+
+def leverage(X):
+    return X@(pinvh(X.T@X))@X.T
+def m_dist(X):
+    return X@(pinvh(X.T@X))@X.T
+
+sns.heatmap(H:=leverage(B1))
 ```
 
 ```{code-cell} ipython3
-plt.spy(T, marker='.', alpha=.50)
-# plt.spy(T2, marker='.', alpha=.50, color='r')
-T2
-# squareform(pdist(adata.X.toarray(), 'cosine'))
-
+sns.displot((hii:=np.diag(H)))
 ```
 
 ```{code-cell} ipython3
-T.nonzero()
-```
-
-```{code-cell} ipython3
-from scipy.sparse.linalg import eigsh
-
-# pca = PCA().fit_transform(np.asarray(adj))
-sig, u = eigsh(adj.values, k=90)
-```
-
-```{code-cell} ipython3
-adj_filt = u@np.diag(sig/(1+sig))@u.T
-plt.spy(adj_filt)
-```
-
-```{code-cell} ipython3
-plt.spy(np.where(adj_filt>1e-2, adj_filt, 0))
-```
-
-```{code-cell} ipython3
-import seaborn as sns
-
-# sns.clustermap(np.where(adj_filt>1e-2, adj_filt, 0))
-sns.clustermap(adj_filt)
-```
-
-```{code-cell} ipython3
-sns.clustermap(adj)
+plt.spy(adata.varp['A'], marker='o', color='lightgrey')
+plt.spy(np.maximum(T.toarray(),T.T.toarray()), 
+        marker='.', color='k', label='diffusion-steiner')
+plt.spy(project_ADL(B1[hii>0.3], cos=False)[0],
+       marker='x', color='xkcd:rust', label='leverage')
+# plt.spy(np.maximum(STN.toarray(),STN.T.toarray()), 
+#         marker='x', color='xkcd:rust', label='steiner')
+plt.spy(np.maximum(MST.toarray(), MST.T.toarray()), 
+        marker='+', color='dodgerblue', label='plain MST')
+plt.legend(bbox_to_anchor=(1,.7))
 ```
 
 ```{code-cell} ipython3

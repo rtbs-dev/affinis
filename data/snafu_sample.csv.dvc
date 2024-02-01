@@ -1,0 +1,13 @@
+md5: f7c6706674a5b477fe2f4ae866afb92e
+frozen: true
+deps:
+- checksum: '"28cc716b87a13657375e2d242b390e509da772c33baba03d733950b23cddf0bd"'
+  size: 1136328
+  hash: md5
+  path: 
+    https://raw.githubusercontent.com/coderpotter/snafu-py/master/fluency_data/snafu_sample.csv
+outs:
+- md5: f1951b9446781541bc26b704fc99a39e
+  size: 1136328
+  hash: md5
+  path: snafu_sample.csv

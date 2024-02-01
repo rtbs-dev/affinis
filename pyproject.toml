@@ -1,24 +1,47 @@
 [tool.poetry]
 name = "affinis"
-version = "0.1.0"
+version = "0.4.1"
 description = ""
-authors = ["tbsexton <thurston.sexton@nist.gov>"]
+authors = ["Rachael Sexton <rtbs@nist.gov>"]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-pandas = "^1.1.3"
-networkx = "^2.5"
-anndata = "^0.8.0"
+python = ">=3.10,<3.13"
+pandas = ">=1.5.3"
+networkx = ">=3"
 scikit-learn = "^1.2.0"
-static-frame = "^1.0.0"
-geomstats = "^2.5.0"
-
-[tool.poetry.dev-dependencies]
-pytest = "^5.2"
-ipykernel = "^6.9.2"
+toolz = "^0.12.0"
+intervaltree = "^3.1.0"
+bidict = "^0.22.1"
+scipy = "^1.10"
+awkward = "^2.3.3"
+awkward-pandas = "^2023.8.0"
+plum-dispatch = "^2.2.2"
 
 [tool.poetry.group.dev.dependencies]
+pytest = "^5.2"
+ipykernel = "^6.9.2"
 seaborn = "^0.12.1"
+black = "^23.3.0"
+ruff = "^0.1"
+
+
+[tool.poetry.group.docs.dependencies]
+pydlc = "^0.2"
+pygraphviz = "^1.11"
+netgraph = "^4.12.11"
+pyvis = "^0.3.2"
+
+
+[tool.poetry.group.experiments.dependencies]
+cython = "^3.0.5"
+dvc = "^3.29.0"
+typer = { extras = ["all"], version = "^0.9.0" }
+binsparse = { git = "https://github.com/ivirshup/binsparse-python.git", rev = "main" }
+zarr = "^2.16.1"
+csrgraph = "^0.1.28"
+coconut = {extras=["kernel"], version= "^3.0.4"}
+yappi = "^1.6.0"
+
 
 [build-system]
 requires = ["poetry>=0.12"]

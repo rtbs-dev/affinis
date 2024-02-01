@@ -1,0 +1,31 @@
+params:
+  - seed
+  - random_graphs
+  # - params.yaml
+  # - random_graphs
+stages:
+  graph_samples:
+    matrix:
+      n_nodes: ${random_graphs.nums_nodes}
+      graph_type: ${random_graphs.graph_types}
+    cmd: >
+      coconut-run random_graphs/random_block_graphs.coco 
+      ${item.n_nodes} 
+      --graph-type=${item.graph_type} 
+      --graph-pop-size=${random_graphs.graph_pop_size}
+    deps:
+      - random_graphs/random_block_graphs.coco
+    outs:
+      - random_graphs/data/sim-study.zarr/${item.graph_type}/n${item.n_nodes}
+  # sim_study_data: 
+  #   matrix: 
+  #     n_nodes: ${random_graphs.nums_nodes}
+  #     graph_type: ${random_graphs.graph_types}
+  #   cmd: >
+  #     coconut-run random_graphs/sim_study.coco sim-data
+  #     ${item.n_nodes} --graph-type=${item.graph_type}
+  #   deps:
+  #     - random_graphs/sim_study.coco
+  #     - random_graphs/data/${item.graph_type}_n${item.n_nodes}.npz
+  #   outs:
+  #     - random_graphs/data/${item.graph_type}_n${item.n_nodes}_sim.npz

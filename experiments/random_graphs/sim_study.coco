@@ -1,0 +1,58 @@
+import numpy as np
+from affinis.associations import *
+from affinis.proximity import sinkhorn
+from toolz import valmap
+from affinis.utils import edge_mask_to_laplacian, _diag, _sq
+from tqdm import tqdm
+import typer
+from pathlib import Path
+import csrgraph as cg
+import zipfile 
+from scipy.sparse import csr_array
+import zarr, binsparse
+from coconut import embed
+from sklearn.covariance import GraphicalLasso
+# from collections import namedtuple
+# from typing import NamedTuple
+
+ZARR_ROOT = 'random_graphs/data/sim-study.zarr'
+app = typer.Typer()
+
+# @safe_call$
+def glasso(X, *args)=
+    GraphicalLasso().fit(X.toarray()).get_precision()
+
+assoc_funcs = {
+
+    # 'co-occur':_sq(coocur_prob(X, pseudocts=1.)),
+    'CS': ochiai,
+    'DS': sinkhorn..ochiai,
+    'RP': resource_project,
+    # 'OR': _sq(odds_ratio(X, pseudocts=1)),
+    'YY':yule_y,
+    # 'yuley': prox_to_edgeprob(yule_y(X)),
+    'MI': mutual_information,
+    # 'yuleq':np.arcsin(prox_to_edgeprob(yule_y(X)))/np.pi +0.5,
+    'G1': glasso,
+    # 'chow-liu':_sq((chow_liu(X, pseudocts=0.5)>0.).astype(int)), 
+
+
+    # 'sinkhorn-cos': _squareform(sinkhorn(cos - np.diag(np.diag(cos)), err=1e-8)),
+} |> valmap$((<..)$(_sq))
+
+@app.command()
+def sim_eval(graph_type:str='block', n_nodes=30, g_id=2):
+    z = zarr.open(ZARR_ROOT, mode='a')[f'{graph_type}'][f'n{n_nodes}'][f'g{g_id}']
+    
+    g = csr_array(binsparse.read(z['graph']))
+    rw = csr_array(binsparse.read(z['walks'])).astype(int)
+    # embed()
+    # print(rw.shape)
+    print(assoc_funcs|> valmap$(safe_call$(?, rw)))
+    # print(rw.todense())
+
+    ...
+
+if __name__=='__main__': 
+
+    app()

@@ -1,0 +1,270 @@
+schema: '2.0'
+stages:
+  graph_samples@10-tree:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  10  --graph-type=tree\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/tree/n10
+      hash: md5
+      md5: d34180dc594e803e8540fd6348f386a0.dir
+      size: 1544360
+      nfiles: 9151
+  graph_samples@10-block:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  10  --graph-type=block\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/block/n10
+      hash: md5
+      md5: 0296ab96d3a113a707c2db113c7fde5c.dir
+      size: 1437889
+      nfiles: 8501
+  graph_samples@30-tree:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  30  --graph-type=tree\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/tree/n30
+      hash: md5
+      md5: 032b95a03848f9da172d207089d24923.dir
+      size: 1521943
+      nfiles: 8501
+  graph_samples@30-block:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  30  --graph-type=block\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/block/n30
+      hash: md5
+      md5: 63157dc20d7d62924633236a0fe80653.dir
+      size: 1543547
+      nfiles: 8501
+  graph_samples@100-tree:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  100  --graph-type=tree\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/tree/n100
+      hash: md5
+      md5: 2a1a30c7addfac1df8aa64f08adc5094.dir
+      size: 2114169
+      nfiles: 8501
+  graph_samples@100-block:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  100  --graph-type=block\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/block/n100
+      hash: md5
+      md5: 14b9649ca869fcc3d092b116c018912a.dir
+      size: 2206603
+      nfiles: 8501
+  graph_samples@300-tree:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  300  --graph-type=tree\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/tree/n300
+      hash: md5
+      md5: cc4635c3d77f846efa56a1e3098aca6f.dir
+      size: 4825826
+      nfiles: 8501
+  graph_samples@300-block:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  300  --graph-type=block\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/block/n300
+      hash: md5
+      md5: d3e5ee7c76e73e4829fc7ff0ceb2aec5.dir
+      size: 5156727
+      nfiles: 8501
+  graph_samples@1000-tree:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  1000  --graph-type=tree\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/tree/n1000
+      hash: md5
+      md5: 223f087d86f91caf07253f7f32e5df6d.dir
+      size: 23905106
+      nfiles: 8501
+  graph_samples@1000-block:
+    cmd: "coconut-run random_graphs/random_block_graphs.coco  1000  --graph-type=block\
+      \  --graph-pop-size=500\n"
+    deps:
+    - path: random_graphs/random_block_graphs.coco
+      hash: md5
+      md5: 415c7f66acc62c1f9989a49d7594aaac
+      size: 4280
+    outs:
+    - path: random_graphs/data/sim-study.zarr/block/n1000
+      hash: md5
+      md5: 719466844e7a92c6b3a66b2d91987544.dir
+      size: 25119717
+      nfiles: 8501
+  sim_study_data@10-tree:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 10 --graph-type=tree\n"
+    deps:
+    - path: random_graphs/data/tree_n10.npz
+      hash: md5
+      md5: 6156a6c6e4c0c2cdbb7457fb763b49fd
+      size: 208014
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/tree_n10_sim.npz
+      hash: md5
+      md5: 9de8005deb9fdb229c78d116b6c62432
+      size: 625775
+  sim_study_data@10-block:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 10 --graph-type=block\n"
+    deps:
+    - path: random_graphs/data/block_n10.npz
+      hash: md5
+      md5: 32e0d89b36d92840f8c73976937f9637
+      size: 209737
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/block_n10_sim.npz
+      hash: md5
+      md5: fb1616b682e7de71465d48d2cf5cd345
+      size: 626730
+  sim_study_data@30-tree:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 30 --graph-type=tree\n"
+    deps:
+    - path: random_graphs/data/tree_n30.npz
+      hash: md5
+      md5: 8421ae6831bbe66bdab5741e8db83103
+      size: 271205
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/tree_n30_sim.npz
+      hash: md5
+      md5: f9a555507cf3870d86ac787df151d9de
+      size: 1007840
+  sim_study_data@30-block:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 30 --graph-type=block\n"
+    deps:
+    - path: random_graphs/data/block_n30.npz
+      hash: md5
+      md5: ffb82d3527aaf5e90870dc6ae679ad4d
+      size: 284612
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/block_n30_sim.npz
+      hash: md5
+      md5: a1f0a97c3e21b7fc87a3bb4c5ba9c430
+      size: 1003064
+  sim_study_data@100-tree:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 100 --graph-type=tree\n"
+    deps:
+    - path: random_graphs/data/tree_n100.npz
+      hash: md5
+      md5: 3b02fb456491c27b63672e3d3554146b
+      size: 532988
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/tree_n100_sim.npz
+      hash: md5
+      md5: 43f91309b59b1235151d091d9a62dc2f
+      size: 3344108
+  sim_study_data@100-block:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 100 --graph-type=block\n"
+    deps:
+    - path: random_graphs/data/block_n100.npz
+      hash: md5
+      md5: d97686dbc23e8b4b0245a7ea68c5bad1
+      size: 614374
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/block_n100_sim.npz
+      hash: md5
+      md5: 7a7e4b7dfc17498975be44bab26e8d50
+      size: 3233851
+  sim_study_data@300-tree:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 300 --graph-type=tree\n"
+    deps:
+    - path: random_graphs/data/tree_n300.npz
+      hash: md5
+      md5: 2fff32b1656224a14022781875c2ab2a
+      size: 1407665
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/tree_n300_sim.npz
+      hash: md5
+      md5: 352c2ff6dce6dbc7325e0fcc0be83a4c
+      size: 17844655
+  sim_study_data@300-block:
+    cmd: "coconut-run random_graphs/sim_study.coco sim-data 300 --graph-type=block\n"
+    deps:
+    - path: random_graphs/data/block_n300.npz
+      hash: md5
+      md5: f180ac1740e7e3e19f6ba30eaefe104c
+      size: 1742446
+    - path: random_graphs/sim_study.coco
+      hash: md5
+      md5: fdd3a9f41a9d6fa23c7fb2d939a9392e
+      size: 2189
+    outs:
+    - path: random_graphs/data/block_n300_sim.npz
+      hash: md5
+      md5: e08064d2331eb1f28acaef1303e3778a
+      size: 16500204

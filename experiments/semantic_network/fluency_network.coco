@@ -1,0 +1,79 @@
+import numpy as np
+import pandas as pd
+import networkx as nx
+from toolz import do
+import seaborn as sns
+import matplotlib.pyplot as plt
+from netgraph import Graph, InteractiveGraph, EditableGraph
+from affinis.associations import spanning_forests_edge_prob
+from affinis.filter import min_connected_filter
+from affinis.metrics import f_beta
+from affinis.utils import _sq
+from numpy.lib.stride_tricks import as_strided, sliding_window_view
+def arr_cooc(x, n=2):
+    return sliding_window_view(x,min(n, x.shape[0]))
+
+if __name__=="__main__":
+
+    df = pd.read_csv('data/snafu_sample.csv', dtype={'category':'category'})
+    idlist=df.id.rename('idlist').str.cat(df.listnum.astype(str))
+    df = df.assign(
+        item=df['item']
+        .str.replace('aligator', 'alligator')
+        .str.replace('^a+rdva+rk', 'aardvark')
+        .str.replace('baboob', 'baboon')
+        .str.replace('antaloupe', 'antelope'),
+        idlist=idlist
+    ) #|> do$(.set_index([idlist, 'item'], drop=False))
+    df=df.set_index([idlist, 'item'], drop=False)
+    animals = (
+        df
+        #  .assign(idlist=idlist)
+        #  [df.item.isin((df.item.value_counts()>20).index.tolist())]#index.tolist())]
+
+        #  [df.item.isin((df.item.value_counts().pipe(lambda s: s[s>20])).index.tolist())]
+        .query('category=="animals"')#[['idlist','item']]
+        .assign(animals=1.)['animals']
+        #  .set_index(['idlist','item'])
+        .pipe(lambda df: df[~df.index.duplicated(keep='first')])
+        .unstack().fillna(0.)#.drop_levels(0)
+        .pipe(lambda df: df.loc[:,df.sum()>50])
+    )
+
+    all_X = animals.values
+    animals
+
+
+    # as_strided(df.item.values, shape=(df.length,2), strides=
+    # (arr_cooc(df.item.values, 3))
+    # df.groupby(level=0)['item']
+    animal_occ = (
+        df
+    #  [df.item.isin(df.item.value_counts(ascending=False).head(100).index.tolist())]
+    #  [df.item.isin((df.item.value_counts().pipe(lambda s: s[s>20])).index.tolist())]
+        .query('category=="animals"')
+        .item.astype('category')
+    )
+    dummies = np.eye(animal_occ.dtype.categories.shape[0])
+    roll_X=np.vstack([dummies[arr_cooc(g[1].values, n=10),:].max(axis=1) for g in animal_occ.cat.codes.groupby(level=0)])#[:,]
+    roll_X = roll_X[:,animal_occ[animal_occ.isin(animals.columns.tolist())].cat.codes.unique()]
+    X = roll_X  # data=np.load()
+    evd_L = spanning_forests_edge_prob(X)
+    # spanning_forests_edge_prob()
+    print(np.mean(evd_L), evd_L.shape)
+    G = nx.from_pandas_adjacency(pd.DataFrame(_sq(~min_connected_filter(_sq(evd_L)).mask), index=animals.columns, columns=animals.columns))
+    pos = nx.kamada_kawai_layout(G)
+
+    # %matplotlib widget
+    plt.figure(figsize=(15,15))
+
+    # gplot=InteractiveGraph(
+    #     G, 
+    #     node_labels=True, 
+    #     # node_layout='dot', 
+    #     # node_label_offset=0.05,
+    #     # node_size=2,
+    #     directed=False,
+    # )
+    nx.draw_networkx(G, pos=pos, node_color='w')
+    plt.show()

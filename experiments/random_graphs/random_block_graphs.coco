@@ -1,0 +1,135 @@
+import networkx as nx
+from toolz import juxt, do
+import numpy as np
+import typer
+from typing import Literal
+from scipy import sparse
+import csrgraph as cg
+from pathlib import Path
+# from enum import Enum
+import zarr
+import binsparse
+from tqdm import trange
+from affinis.utils import _sq
+# import dvc.api
+# class GraphType(Enumerate):
+# class TreeGraphTypes(str, Enum):
+#     block='block'
+    # tree='tree'
+
+# class SmallWorldGraphTypes(str, Enum):
+#     ws='watts-strogatz'
+#     er='erdos-renyi'
+# type GraphTypes = TreeGraphTypes | SmallWorldGraphTypes
+type GraphTypes = Literal['block', 'tree']
+# type SmallWorldGraphTypes=Literal['watts-strogatz', 'erdos-renyi']
+# type GraphTypes = Literal[TreeGraphTypes,SmallWorldGraphTypes]
+
+# params=dvc.api.params_show()
+def serialize(
+    name:GraphTypes, 
+    size:int, 
+    gs:(nx.Graph), 
+    root=Path('random_graphs/data/')
+):
+    fn = (root|>do$(.mkdir(exist_ok=True, parents=True)))/(name+f'_n{size}.npz')
+    # with fn.open(mode='w') as fp:
+    (gs 
+        |> map$(nx.adjacency_matrix ..> .toarray() ..> _sq) 
+        # |> map$(.toarray()) 
+        |*> np.savez_compressed$(fn)
+    )
+
+sparseG_from_nx = cg.csrgraph..nx.to_numpy_array
+
+def sim_graph_and_data(
+    graph_gen_func, 
+    n_nodes,
+    n_jumps, 
+    n_obs, 
+    rng=np.random.default_rng(2)
+):
+    Gnx = graph_gen_func(n_nodes)
+    n = nx.number_of_nodes(Gnx) # graph_gen_func could change it!
+    G = sparseG_from_nx(Gnx)
+    starts = rng.choice(n, size=n_obs)
+    rw = G.random_walks(walklen = n_jumps, start_nodes=starts) #TODO no seed... :(
+    # trick to one-hot encode occurrences from walks
+    row_idx = np.repeat(np.arange(rw.shape[0])[:,None], rw.shape[1],1).flatten()
+    col_idx = rw.flatten()
+    idx = np.unique(np.array([row_idx,col_idx]), axis=1)  # no duplicates
+    # assert G.mat.shape[0]>=col_idx.max(), f'{G.mat.shape} A is bad for col pointer {col_idx.max()}' 
+    X = sparse.coo_matrix(
+        (np.ones_like(idx[0]), (idx[0], idx[1])), 
+        shape=(rw.shape[0], n)
+    ).astype(bool)
+    return G.mat, X
+
+# def _sim_graph_and_data_generator(sim_func, n_sims):
+#     for i in trange(n_sims): 
+#         g,rw=sim_func()
+#         yield g,rw
+
+def main(
+    n_nodes:int, 
+    seed:int=2, 
+    graph_pop_size:int=1000, 
+    graph_type:str='block'
+):
+
+    rng = np.random.default_rng(seed=seed)
+    ids: (int) = trange(1,1+graph_pop_size)
+    # n=n_nodes+1 if graph_type=='block' else n_nodes
+    
+    if graph_type=='block': 
+        n = n_nodes+1
+        graph_gen = nx.line_graph..nx.random_labeled_tree$(seed=rng)
+    else: 
+        n = n_nodes
+        graph_gen = nx.random_labeled_tree$(seed=rng)
+    rate_param = 1/n_nodes
+    n_jumps = max(5, rng.geometric(rate_param))
+    n_obs = max(rng.negative_binomial(2, rate_param), 10)
+    sim_gen = sim_graph_and_data$(graph_gen, n, n_jumps, n_obs, rng=rng)
+    z = zarr.open('random_graphs/data/sim-study.zarr', mode='a')
+    
+    def store_graph_and_data(zarr_store, g_id, g, rw):
+        # g_group = z.create_group(f'{graph_type}/{g_id}')
+        # binsparse.write(g_group, f'graph',g)
+        # g_group['graph'] = rw
+        binsparse.write(zarr_store, f'{graph_type}/n{n_nodes}/g{g_id}/graph',g)
+        binsparse.write(zarr_store, f'{graph_type}/n{n_nodes}/g{g_id}/walks',rw)
+
+    # data_gen = _sim_graph_and_data_generator(sim_gen, graph_pop_size)
+    data_gen = (sim_gen() for i in trange(graph_pop_size))
+    # print(type(data_gen))
+    for i,(g,rw) in enumerate(data_gen):
+        store_graph_and_data(z, i+1, g, rw)
+    
+    # z.close()
+
+   
+    # graphs: [nx.Graph] = ids |> map$(
+    #     x=>nx.random_labeled_tree(n, seed=rng)
+    # )
+    # graphs_and_rws = (sim_graph_and_data(graph_gen(n)) for n in ids)
+    
+    # for
+    # (graphs 
+    # |> do$(print$(len))
+    #  |> map$(g=>nx.line_graph(g) if graph_type=='block' else ident(g))
+    #  |> map$(.number_of_edges()) 
+    #  |> all_equal 
+    #  |> juxt(np.mean, np.std)
+    #  |> do$(print)
+    #  |> serialize$(graph_type, n_nodes)
+    # )
+
+
+
+if __name__=="__main__":
+    # print(params)
+    typer.run(main)
+
+
+    
