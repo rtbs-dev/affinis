@@ -2,9 +2,9 @@
 
 site_name = "Affinis"
 
-site_description = "A new project generated from the default template project."
+site_description = "Tools for inferring relations from binary co-occurrence data"
 site_author = "Rachael Sexton"
-#site_url = "https://www.example.com/"
+site_url = "https://pages.nist.gov/affinis/"
 
 copyright = """
 Affinis and all of it's associated documentation are in the public domain (see the <a href="https://github.com/usnistgov/affinis/blob/main/LICENSE.md"> license </a>)
@@ -12,6 +12,7 @@ Affinis and all of it's associated documentation are in the public domain (see t
 nav = [
   {"Home" = "index.md"},  
   {"Installation" = "install.md"},
+  {"Contributing" = "contributing.md"},
   { "User Guide" = [
       "user-guide/associations.md",
       "user-guide/smoothing.md",
@@ -19,13 +20,6 @@ nav = [
         # "using/psdct.md"
     ]},
   {"Examples" = ["case-studies/example.md"]},
-
-    # [
-        # "getting-started/01-installation.md",
-        # "getting-started/02-tutorial.md",
-        # "getting-started/03-performance.md"
-    # ]
-  # },
   { "API" = [
         'api/associations.md',
         'api/plots.md',
@@ -37,12 +31,6 @@ nav = [
         
   ]},
 ]
-# nav = [
-#   { "Get started" = "index.md" },
-#   { "Markdown in 5min" = "markdown.md" },
-# ]
-#extra_css = ["stylesheets/extra.css"]
-
 extra_css = [
   "https://pages.nist.gov/nist-header-footer/css/nist-combined.css",
   "css/mkdocstrings.css"
@@ -54,18 +42,9 @@ extra_javascript = [
   "https://pages.nist.gov/nist-header-footer/js/nist-header-footer.js",
 ]
 
-[project.markdown_extensions.footnotes]
-[project.markdown_extensions.admonition]
-
-[project.markdown_extensions.pymdownx.arithmatex]
-generic=true
-
-[project.markdown_extensions.pymdownx.details]
-[project.markdown_extensions.attr_list]
 
 [project.theme]
 
-#custom_dir = "overrides"
 favicon = "images/favicon.png"
 language = "en"
 
@@ -112,16 +91,22 @@ toggle.name = "Switch to light mode"
 text = "Rubik"
 code = "Fira Code"
 
-#[project.theme.icon]
-#logo = "lucide/smile"
-#repo = "lucide/smile"
-
 [[project.extra.social]]
 name = "USNISTGOV on GitHub"
 icon = "fontawesome/brands/github"
 link = "https://github.com/usnistgov/affinis"
 
+### Markdown Ext. 
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.admonition]
 
+### pymdownx
+[project.markdown_extensions.pymdownx.arithmatex]
+generic=true
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style=true
 [project.markdown_extensions.pymdownx.highlight]
 anchor_linenums = true
 line_spans = "__span"
@@ -133,10 +118,10 @@ custom_fences = [
   { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" }
 ]
 
+### mkdocstrings
 [project.plugins.mkdocstrings.handlers.python]
 inventories = ["https://docs.python.org/3/objects.inv"]
 paths = ["affinis/"]
-
 [project.plugins.mkdocstrings.handlers.python.options]
 docstring_style = "google"
 inherited_members = true

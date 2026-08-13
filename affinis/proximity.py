@@ -48,7 +48,7 @@ def sinkhorn(A:SimsMat, i:int=0, err:float=1e-6, it_max:int=1000):
     marg_sum = A.sum(0)
     if np.std(marg_sum) < err:
         return np.maximum(A, A.T)
-    elif i > 1000:
+    elif i > it_max:
         import warnings
 
         warnings.warn("sinkhorn iterations did not converge...", RuntimeWarning)

@@ -1,0 +1,39 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: affinis
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Rachael
+    family-names: Sexton
+    email: rachael.sexton@nist.gov
+    affiliation: National Institute of Standards and Technology
+    orcid: "https://orcid.org/0000-0001-5904-2887"
+identifiers:
+  - type: doi
+    value: 10.18434/mds2-4107
+repository-code: "https://github.com/usnistgov/affinis"
+url: "https://pages.nist.gov/affinis"
+repository: "https://data.nist.gov/od/id/mds2-4107"
+abstract: >-
+  Affinis is a tool for assisting in unsupervised structure learning on sparse, binary data.
+  For large (sparse) feature matrices, especially ones with binary-valued entries, techniques to figure out the underlying structure of the feature space are widely varied, and different communities have widely different practices and assumptions for what is an appropriate approach.
+  Affinis provides reference implementations for many of these methods, with a consistent API to enable community adoption and a shared benchmarking environment.
+keywords:
+  - network analysis
+  - sparse matrix
+  - covariance shrinkage
+  - binary data
+  - structure learning
+  - edge prediction
+  - filtering
+  - feature learning
+  - multi-label
+  - graph theory
+  - scientific-software
+  - tools
+license: NIST-Software

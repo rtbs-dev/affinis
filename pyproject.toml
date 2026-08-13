@@ -1,40 +1,65 @@
-[tool.poetry]
+[project]
 name = "affinis"
-version = "0.7.4"
-description = ""
-authors = ["Rachael Sexton <rtbs@nist.gov>"]
+version = "0.7.6"
+description = "Tools for inferring relations from binary co-occurrence data"
+requires-python = ">=3.11"
+authors = [{name = "Rachael Sexton", email = "rtbs@nist.gov"}]
+maintainers = [
+  { name = "Rachael Sexton", email = "gh@rtbs.dev"}
+]
 
-[tool.poetry.dependencies]
-python = ">=3.11,<3.13"
-scipy = "^1.10"
-sparse = "^0.15.4"
-jaxtyping = "^0.3.3"
-plum-dispatch = "^2.6.0"
 
-[tool.poetry.group.dev.dependencies]
-ipykernel = "^6.9.2"
-seaborn = "^0.12.1"
-black = "^23.3.0"
-ruff = "^0.1"
-pytest = "^8.3.3"
-toolz = "^0.12.0"
-hypothesis = "^6.151.5"
 
-[tool.poetry.group.docs.dependencies]
-pydlc = "^0.2"
-# pygraphviz = "^1.11"
-contingency = {git = "https://github.com/usnistgov/Contingency.git"}
-netgraph = "^4.12.11"
-pyvis = "^0.3.2"
-jupyter-book = "^1.0.2"
-sphinx-autodoc-typehints = "<2.4.0"
-scikit-learn = "^1.2.0"
-pandas = ">=1.5.3"
-networkx = ">=3"
-zensical = "^0.0.21"
-mkdocstrings = {extras = ["python"], version = "^1.0.2"}
-memory-profiler = "^0.61.0"
+keywords = [
+  "network analysis",
+  "sparse matrix",
+  "covariance shrinkage",
+  "binary data",
+  "structure learning",
+  "edge prediction",
+  "filtering",
+  "feature learning",
+  "multi-label",
+  "graph theory",
+  "scientific-software",
+  "tools",
+]
 
+dependencies = [
+  "scipy~=1.10",
+  "sparse~=0.15",
+  "jaxtyping~=0.3",
+  "plum-dispatch~=2.6",
+  "contingency-tools~=0.2",
+]
+
+[project.urls]
+source = "https://github.com/usnistgov/affinis"
+documentation = "https://pages.nist.gov/affinis"
+homepage = "https://data.nist.gov/od/id/mds2-4107"
+
+[dependency-groups]
+dev = [
+  "ipykernel~=6.9.2",
+  "seaborn~=0.12.1",
+  "black~=23.3.0",
+  "ruff~=0.1",
+  "pytest~=8.3.3",
+  "toolz~=0.12.0",
+  "hypothesis~=6.151.5",
+]
+
+docs = [
+  # pygraphviz = "^1.11"
+  "pydlc~=0.2",
+  "netgraph~=4.12",
+  "pyvis~=0.3",
+  "scikit-learn == 1.*",
+  "pandas >=1.5",
+  "networkx >=3",
+  "zensical >=0.0",
+  "mkdocstrings[python]~=1.0",
+]
 
 [tool.pytest.ini_options]
 addopts = "--jaxtyping-packages=associations,priors,beartype.beartype"
