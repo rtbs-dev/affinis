@@ -35,12 +35,12 @@ homepage = "https://data.nist.gov/od/id/mds2-4107"
 [dependency-groups]
 dev = [
   "ipykernel~=7.3",
-  "seaborn~=0.12.1",
   "black~=23.3.0",
   "ruff~=0.1",
   "pytest~=8.3.3",
   "toolz~=0.12.0",
   "hypothesis~=6.151.5",
+  "seaborn>=0.13",
 ]
 
 docs = [

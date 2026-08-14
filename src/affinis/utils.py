@@ -5,7 +5,9 @@ import numpy as np
 # from bidict import frozenbidict
 from scipy.linalg import lapack
 from scipy.sparse import coo_array, dok_array
-from jaxtyping import Int
+from sparse import COO, diagonal, triu, stack
+from jaxtyping import Int, Shaped
+from plum import dispatch
 
 Idx: TypeAlias = Int[np.ndarray, "*elems"]
 
@@ -95,6 +97,47 @@ def sq_ij_e(n: int, ij: tuple[Idx, Idx]) -> Idx:
     e = (n * (n - 1) / 2) - (n - i) * ((n - i) - 1) / 2 + j - i - 1
     return e.astype(int)
     # return _map_edge_to_nodes(n).inverse[ij]
+
+
+@dispatch(precedence=1)
+def sq_flat(A:Shaped[np.ndarray, "n n"])-> Shaped[np.ndarray, "e"]:
+    """could just use `squareform`..."""
+    n = min(A.shape[-1],A.shape[-2])
+    return A[np.triu_indices(n, k=1)]
+
+
+@dispatch
+def sq_flat(A: Shaped[COO, "*batch n n"])->Shaped[COO, "*batch e"]:
+    """New sparse+batched implementation"""
+    n = min(A.shape[-1],A.shape[-2])
+    a=triu(A, k=1)  # wow this works with ndim>2 as well! 
+    coords = sq_ij_e(n, a.coords[-2:,:])  # which means I can too!
+    shape = int(n*n/2-n/2)
+   
+    if a.ndim>2:  # maybe there's a slicing/indexing way to make implicit
+        coords =  np.vstack([a.coords[0], coords])
+        shape = (a.shape[0],shape)
+    return COO(shape=shape, coords=coords, data=a.data)
+
+
+@dispatch(precedence=1)
+def sq_sq(e:Shaped[np.ndarray, "e"])-> Shaped[np.ndarray, "n n"]:
+    return squareform(e)
+
+
+@dispatch
+def sq_sq(e: Shaped[COO, "e"])-> Shaped[COO, "n n"]:
+    ## NOT CURRENTLY BATCH-DIM COMPATIBLE
+    n = int(np.ceil(np.sqrt(e.shape[0] * 2)))
+    # Check that e is of valid dimensions.
+    if n * (n - 1) != e.shape[0] * 2:  # identical check from scipy
+        raise ValueError(
+            'Incompatible vector size. It must be a triangular number.'
+        )
+    tri_coords=sq_e_ij(n, e.coords[0])
+    tri=COO(coords=tri_coords, shape=(n,n), data=e.data)
+    return tri+tri.T
+
 
 
 def _pairwise_combinations_of(a):
