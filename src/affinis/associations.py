@@ -1,28 +1,30 @@
 
 from __future__ import annotations
+
 import numpy as np
-from scipy.sparse.csgraph import minimum_spanning_tree, shortest_path, reconstruct_path
-from scipy.sparse import coo_array, issparse
 import sparse
 from joblib import Parallel, delayed
+from scipy.sparse import coo_array, issparse
+from scipy.sparse.csgraph import minimum_spanning_tree, reconstruct_path, shortest_path
+
+from .distance import adjusted_forest_dists
+from .edgespace import (
+    binary_feature_edge_cliques,
+    flat2sq,
+    sq2flat,
+)
+from .filter import min_connected_filter
+from .priors import PsdCts, pseudocount
+from .proximity import sinkhorn
+from .types import FeatMat, FPopts, SimsMat
 from .utils import (
-    _sq,
+    _norm_diag,
     _outer,
     _sparse_directed_to_symmetric,
+    _sq,
     # groupby_col0,
-    csr_rows_idx,
-    complete_edgelist_on_nodes,
-    sq_ij_e,
     edge_weights_to_laplacian,
-    _norm_diag,
-    sq2flat, flat2sq,
-    binary_feature_edge_cliques,
 )
-from .types import FeatMat, SimsMat, FPopts
-from .priors import pseudocount, PsdCts
-from .distance import adjusted_forest_dists
-from .proximity import sinkhorn
-from .filter import min_connected_filter
 
 __all__ = [
     "coocur_prob",
@@ -277,12 +279,15 @@ def ochiai(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Returns: square cosine similarity matrix (incl. ones in the diagonal)
 
     """
+    G = X.T@X
+    return _norm_diag(G, psdcts=pseudocts)
     # I = np.eye(X.shape[-1])
-    co_occurs = _sq(_gram(X, X))  # + pseudocts
-    exposures = X.sum(axis=0)
-    pseudo_exposure = _sq(np.sqrt(_outer(np.multiply, exposures)))  # + 2 * pseudocts
-    # return _sq(co_occurs) / pseudo_exposure + np.eye(X.shape[1])
-    return _sq(pseudocount(pseudocts)(co_occurs, pseudo_exposure)) + np.eye(X.shape[1])
+    # co_occurs = sq2flat(X.T@X)  # + pseudocts
+    # exposu
+    # # exposures = X.sum(axis=0)
+    # pseudo_exposure = _sq(np.sqrt(_outer(np.multiply, exposures)))  # + 2 * pseudocts
+    # # return _sq(co_occurs) / pseudo_exposure + np.eye(X.shape[1])
+    # return _sq(pseudocount(pseudocts)(co_occurs, pseudo_exposure)) + np.eye(X.shape[1])
 
 
 def binary_cosine_similarity(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -435,7 +440,7 @@ def doubly_stochastic_filter(
 
 def _pursue_tree_basis(edge_candidates, edge_weights, edge_priors=False, beta=0.001):
 
-    if edge_candidates.size()==0:
+    if edge_candidates.size==0:
         # i.e. 0 or 1 nodes were activated (no relationships possible) 
         return edge_candidates
     else: 
@@ -455,27 +460,29 @@ def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta
     """resample with a kernel bootstrap on MSTs in a manifold"""
     N_obs = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if (prior_dists is None) and (not edge_priors):
-
-        prior_dists = -np.log(ochiai(X, pseudocts=0.5))
+        prior_kern = ochiai(X, pseudocts=0.5)
+        prior_dists = sparse.COO(data=-np.log(prior_kern.data),coords=prior_kern.coords, shape=prior_kern.shape)
     elif edge_priors:
         # TODO: enforce laplacian!
         # assert np.allclose(prior_dists.sum(axis=0),0)
         pass
         
     prior_weights = sq2flat(prior_dists)
-    # N_obs = X.toarray() if issparse(X) else X
-    # N_activations = csr_rows_idx(N_obs.tocsr())
 
     
-    activations = Parallel(n_jobs=-1, backend="loky")(
-        delayed(_pursue_tree_basis)(edges, edges)
+    E_activations = Parallel(n_jobs=-1, backend="loky")(
+        delayed(_pursue_tree_basis)(edges, prior_weights[edges])
+        for edges in binary_feature_edge_cliques(N_obs)
     )
-    for edges in binary_feature_edge_cliques(N_obs):
+    
+    # E_activations = [_pursue_tree_basis(edges, prior_weights[edges], edge_priors=edge_priors, beta=beta)
+    #     for edges in binary_feature_edge_cliques(N_obs)
+    # ]
         
-    E_activations = [
-        _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
-        if nodes.size>0 else nodes for nodes in N_activations
-    ]
+    # E_activations = [
+    #     _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
+    #     if nodes.size>0 else nodes for nodes in N_activations
+    # ]
 
     E_coords = np.vstack((
         np.repeat(np.arange(N_obs.shape[0]), np.array([len(e) for e in E_activations])),
@@ -483,9 +490,7 @@ def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta
     ))
     n = X.shape[1]
     m = n * (n - 1) // 2
-    return coo_array(
-        sparse.COO(E_coords, data=1, shape=(X.shape[0], m)).to_scipy_sparse()
-    )
+    return sparse.COO(E_coords, data=1, shape=(X.shape[0], m))
 
     # E_obs = coo_array(
     #     [
@@ -514,7 +519,7 @@ def forest_pursuit_cts(X: FeatMat, prior_dists:SimsMat|None=None) -> SimsMat:
 
     # est_dists = -np.log(prior(X, pseudocts=pseudocts))
     e_obs = _spanning_forests_obs_bootstrap(X, prior_dists=prior_dists)
-    return _sq(e_obs.sum(axis=0))
+    return flat2sq(e_obs.sum(axis=0))
 
 def expected_forest_maximization(
     X: FeatMat,
@@ -580,11 +585,11 @@ def forest_pursuit_edge(
 
     Returns: probability of edge traversal given a co-occurrence. 
     """
-    e_cts = _sq(forest_pursuit_cts(X, prior_dists=prior_dists))
-    uv_cts = _sq(_gram(X, X))
+    e_cts = sq2flat(forest_pursuit_cts(X, prior_dists=prior_dists))
+    uv_cts = sq2flat(_gram(X, X))
     # e_prob = (e_cts + pseudocts) / (uv_cts + 2 * pseudocts)
     e_prob = pseudocount(pseudocts)(e_cts, uv_cts)
-    return _sq(e_prob)
+    return flat2sq(e_prob)
 
 
 def forest_pursuit_interaction(

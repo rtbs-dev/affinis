@@ -2,12 +2,16 @@ from functools import cache
 from typing import Callable, TypeAlias
 
 import numpy as np
-# from bidict import frozenbidict
-from scipy.linalg import lapack
-from scipy.sparse import coo_array, dok_array
-from sparse import COO, diagonal, triu, stack, einsum
 from jaxtyping import Int, Shaped
 from plum import dispatch
+
+# from bidict import frozenbidict
+from scipy.linalg import lapack
+from scipy.sparse import coo_array
+from sparse import COO, diagonal, eye
+
+from .edgespace import flat2sq, sq2flat, sq_e_ij, sq_ij_e
+from .priors import pseudocount
 
 Idx: TypeAlias = Int[np.ndarray, "*elems"]
 
@@ -23,7 +27,7 @@ def _outer(f: Callable[[np.ndarray, np.ndarray], np.ndarray], a: np.ndarray):
 def _sq(A):
     """we want the off-diagonals, flat<->sq
 
-    Typing this out got old. 
+    Typing this out got old.
     """
     return squareform(A, checks=False)
 
@@ -33,17 +37,26 @@ def minmax(x, axis=None):
 
 
 @dispatch(precedence=1)
-def _norm_diag(A:Shaped[np.ndarray, "n n"])->Shaped[np.ndarray, "n n"]:
+def _norm_diag(A: Shaped[np.ndarray, "n n"], psdcts=0.0) -> Shaped[np.ndarray, "n n"]:
     a_ii = np.diag(A)
+    num = sq2flat(A)
+    den = sq2flat(_outer(np.multiply, np.sqrt(a_ii)))
+    return flat2sq(pseudocount(psdcts)(num, den)) + np.eye(a_ii.shape[0])
 
-    return A / _outer(np.multiply, np.sqrt(a_ii))
 
 @dispatch
-def _norm_diag(A: Shaped[COO, "n n"])->Shaped[COO, "n n"]:
-    d=diagonal(A)
-    d_a = d[A.coords[0]]
-    d_b = d[A.coords[1]]
-    return COO(data=A.data/np.sqrt(d_a*d_b).todense(),coords=A.coords)
+def _norm_diag(A: Shaped[COO, "n n"], psdcts=0.0) -> Shaped[COO, "n n"]:
+    d = diagonal(A).todense()
+    A_e = sq2flat(A)
+    d_i, d_j = sq_e_ij(d.size, A_e.coords)
+    d_a = d[d_i[0]]
+    d_b = d[d_j[0]]
+    norm = np.sqrt(d_a * d_b)
+
+    return flat2sq(
+        COO(data=pseudocount(psdcts)(A_e.data, norm), coords=A_e.coords, shape=A_e.shape)
+    ) + eye(d.size)
+
 
 def _diag(A):
     return np.diag(np.diag(A))
@@ -68,99 +81,6 @@ def _std_vec(n: int, i: int):
 #     return frozenbidict(enumerate(zip(*[list(i) for i in np.triu_indices(n, k=1)])))
 
 
-def sq_e_ij(n: int, e: Idx) -> tuple[Idx, Idx]:
-    """Closed-form expression to map edge-to-node-pair indices.
-
-    Get a row-column location in the upper-triangle of a symmetric
-    matrix, given the linear index of it's unrolled vector representation.
-
-    Parameters:
-        n: dimension of square/symmetric matrix
-        e: index of edge(s) from vector-representation
-
-    Returns:
-        pair of row(s),column(s) indices in corresponding matrix.
-    """
-    i = n - 2 - np.floor(np.sqrt(-8 * e + 4 * n * (n - 1) - 7) / 2.0 - 0.5)
-    j = e + i + 1 - n * (n - 1) / 2 + (n - i) * ((n - i) - 1) / 2
-    return i.astype(int), j.astype(int)
-    # return _map_edge_to_nodes(n)[e]
-
-
-def sq_ij_e(n: int, ij: tuple[Idx, Idx]) -> Idx:
-    """Closed-form expression to map edge-to-node-pair indices.
-
-    Get an edge index from a row-column index pai  upper-triangle of a
-    symmetric matrix.
-
-    Parameters:
-        n: dimension of square/symmetric matrix
-        ij: pair of row(s),column(s) indices in corresponding matrix.
-
-    Returns:
-        index of edge(s) from vector-representation
-    """
-    i, j = ij
-    e = (n * (n - 1) / 2) - (n - i) * ((n - i) - 1) / 2 + j - i - 1
-    return e.astype(int)
-    # return _map_edge_to_nodes(n).inverse[ij]
-
-
-@dispatch(precedence=1)
-def sq2flat(A:Shaped[np.ndarray, "n n"])-> Shaped[np.ndarray, "e"]:
-    """could just use `squareform`..."""
-    n = min(A.shape[-1],A.shape[-2])
-    return A[np.triu_indices(n, k=1)]
-
-
-@dispatch
-def sq2flat(A: Shaped[COO, "*batch n n"])->Shaped[COO, "*batch e"]:
-    """New sparse+batched implementation"""
-    n = min(A.shape[-1],A.shape[-2])
-    a=triu(A, k=1)  # wow this works with ndim>2 as well! 
-    coords = sq_ij_e(n, a.coords[-2:,:])  # which means I can too!
-    shape = int(n*n/2-n/2)
-   
-    if a.ndim>2:  # maybe there's a slicing/indexing way to make implicit
-        coords =  np.vstack([a.coords[0], coords])
-        shape = (a.shape[0],shape)
-    return COO(shape=shape, coords=coords, data=a.data)
-
-
-@dispatch(precedence=1)
-def flat2sq(e:Shaped[np.ndarray, "e"])-> Shaped[np.ndarray, "n n"]:
-    return squareform(e)
-
-
-@dispatch
-def flat2sq(e: Shaped[COO, "e"])-> Shaped[COO, "n n"]:
-    ## NOT CURRENTLY BATCH-DIM COMPATIBLE
-    n = int(np.ceil(np.sqrt(e.shape[0] * 2)))
-    # Check that e is of valid dimensions.
-    if n * (n - 1) != e.shape[0] * 2:  # identical check from scipy
-        raise ValueError(
-            'Incompatible vector size. It must be a triangular number.'
-        )
-    tri_coords=sq_e_ij(n, e.coords[0])
-    tri=COO(coords=tri_coords, shape=(n,n), data=e.data)
-    return tri+tri.T
-
-def csr_rows_idx(matrix):
-    """Return column indices for data in matrix, per row (empty array if none)"""
-    rows = matrix.shape[0]
-    for index in range(rows):
-        indptr_start = matrix.indptr[index]
-        indptr_end = matrix.indptr[index + 1]
-        # values = matrix.data[indptr_start:indptr_end]
-        indices = await matrix.indices[indptr_start:indptr_end]
-        # func(indices, values)
-        yield indices
-
-def binary_feature_edge_cliques(X):
-    X_edgespace = sq2flat(einsum('bi,bo->bio', X, X)).tocsr()
-    for row in csr_rows_idx(X_edgespace):
-        yield row
-    
 def _pairwise_combinations_of(a):
     """vec of IDs  --> matrix of pairwise combinations
 
@@ -215,10 +135,10 @@ def _fast_PD_inverse(m):
     """
     cholesky, info = lapack.dpotrf(m)
     if info != 0:
-        raise ValueError("dpotrf failed on input {}".format(m))
+        raise ValueError(f"dpotrf failed on input {m}")
     inv, info = lapack.dpotri(cholesky)
     if info != 0:
-        raise ValueError("dpotri failed on input {}".format(cholesky))
+        raise ValueError(f"dpotri failed on input {cholesky}")
     _upper_triangular_to_symmetric(inv)
     return inv
 
@@ -265,10 +185,12 @@ def sparse_adj_to_incidence(A):
 def n_nodes_from_edges(e):
     return int((np.sqrt(8 * e.shape[0] + 1) + 1) // 2)
 
+
 def edge_weights_to_laplacian(e):
     A = _sq(e)
     D = np.diag(A.sum(axis=0))
     return D - A
+
 
 def edge_mask_to_laplacian(e):
     """given a masked array of edge-weights, form a laplacian matrix with a -1 if
