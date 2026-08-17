@@ -5,7 +5,7 @@ import numpy as np
 # from bidict import frozenbidict
 from scipy.linalg import lapack
 from scipy.sparse import coo_array, dok_array
-from sparse import COO, diagonal, triu, stack
+from sparse import COO, diagonal, triu, stack, einsum
 from jaxtyping import Int, Shaped
 from plum import dispatch
 
@@ -23,7 +23,7 @@ def _outer(f: Callable[[np.ndarray, np.ndarray], np.ndarray], a: np.ndarray):
 def _sq(A):
     """we want the off-diagonals, flat<->sq
 
-    Typing this out got old.
+    Typing this out got old. 
     """
     return squareform(A, checks=False)
 
@@ -32,11 +32,18 @@ def minmax(x, axis=None):
     return (x - x.min(axis=axis)) / (x.max(axis=axis) - x.min(axis=axis))
 
 
-def _norm_diag(A):
+@dispatch(precedence=1)
+def _norm_diag(A:Shaped[np.ndarray, "n n"])->Shaped[np.ndarray, "n n"]:
     a_ii = np.diag(A)
 
     return A / _outer(np.multiply, np.sqrt(a_ii))
 
+@dispatch
+def _norm_diag(A: Shaped[COO, "n n"])->Shaped[COO, "n n"]:
+    d=diagonal(A)
+    d_a = d[A.coords[0]]
+    d_b = d[A.coords[1]]
+    return COO(data=A.data/np.sqrt(d_a*d_b).todense(),coords=A.coords)
 
 def _diag(A):
     return np.diag(np.diag(A))
@@ -100,14 +107,14 @@ def sq_ij_e(n: int, ij: tuple[Idx, Idx]) -> Idx:
 
 
 @dispatch(precedence=1)
-def sq_flat(A:Shaped[np.ndarray, "n n"])-> Shaped[np.ndarray, "e"]:
+def sq2flat(A:Shaped[np.ndarray, "n n"])-> Shaped[np.ndarray, "e"]:
     """could just use `squareform`..."""
     n = min(A.shape[-1],A.shape[-2])
     return A[np.triu_indices(n, k=1)]
 
 
 @dispatch
-def sq_flat(A: Shaped[COO, "*batch n n"])->Shaped[COO, "*batch e"]:
+def sq2flat(A: Shaped[COO, "*batch n n"])->Shaped[COO, "*batch e"]:
     """New sparse+batched implementation"""
     n = min(A.shape[-1],A.shape[-2])
     a=triu(A, k=1)  # wow this works with ndim>2 as well! 
@@ -121,12 +128,12 @@ def sq_flat(A: Shaped[COO, "*batch n n"])->Shaped[COO, "*batch e"]:
 
 
 @dispatch(precedence=1)
-def sq_sq(e:Shaped[np.ndarray, "e"])-> Shaped[np.ndarray, "n n"]:
+def flat2sq(e:Shaped[np.ndarray, "e"])-> Shaped[np.ndarray, "n n"]:
     return squareform(e)
 
 
 @dispatch
-def sq_sq(e: Shaped[COO, "e"])-> Shaped[COO, "n n"]:
+def flat2sq(e: Shaped[COO, "e"])-> Shaped[COO, "n n"]:
     ## NOT CURRENTLY BATCH-DIM COMPATIBLE
     n = int(np.ceil(np.sqrt(e.shape[0] * 2)))
     # Check that e is of valid dimensions.
@@ -138,8 +145,22 @@ def sq_sq(e: Shaped[COO, "e"])-> Shaped[COO, "n n"]:
     tri=COO(coords=tri_coords, shape=(n,n), data=e.data)
     return tri+tri.T
 
+def csr_rows_idx(matrix):
+    """Return column indices for data in matrix, per row (empty array if none)"""
+    rows = matrix.shape[0]
+    for index in range(rows):
+        indptr_start = matrix.indptr[index]
+        indptr_end = matrix.indptr[index + 1]
+        # values = matrix.data[indptr_start:indptr_end]
+        indices = await matrix.indices[indptr_start:indptr_end]
+        # func(indices, values)
+        yield indices
 
-
+def binary_feature_edge_cliques(X):
+    X_edgespace = sq2flat(einsum('bi,bo->bio', X, X)).tocsr()
+    for row in csr_rows_idx(X_edgespace):
+        yield row
+    
 def _pairwise_combinations_of(a):
     """vec of IDs  --> matrix of pairwise combinations
 
@@ -172,16 +193,6 @@ def groupby_col0(a):
     """[see source](https://stackoverflow.com/a/43094244)"""
     return np.split(a[:, 1], np.unique(a[:, 0], return_index=True)[1][1:])
 
-def csr_rows_idx(matrix):
-    """Return column indices for data in matrix, per row (empty array if none)"""
-    rows = matrix.shape[0]
-    for index in range(rows):
-        indptr_start = matrix.indptr[index]
-        indptr_end = matrix.indptr[index + 1]
-        # values = matrix.data[indptr_start:indptr_end]
-        indices = matrix.indices[indptr_start:indptr_end]
-        # func(indices, values)
-        yield indices
 
 def _upper_triangular_to_symmetric(ut):
     n = ut.shape[0]

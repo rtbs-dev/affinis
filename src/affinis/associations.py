@@ -4,6 +4,7 @@ import numpy as np
 from scipy.sparse.csgraph import minimum_spanning_tree, shortest_path, reconstruct_path
 from scipy.sparse import coo_array, issparse
 import sparse
+from joblib import Parallel, delayed
 from .utils import (
     _sq,
     _outer,
@@ -14,6 +15,8 @@ from .utils import (
     sq_ij_e,
     edge_weights_to_laplacian,
     _norm_diag,
+    sq2flat, flat2sq,
+    binary_feature_edge_cliques,
 )
 from .types import FeatMat, SimsMat, FPopts
 from .priors import pseudocount, PsdCts
@@ -418,32 +421,57 @@ def doubly_stochastic_filter(
     return _sq(min_connected_filter(_sq(ds)))
 
 
-def _pursue_tree_basis(dists, nodes, edge_priors=False, beta=0.001):
-    N = dists.shape[0]
-    all_E = complete_edgelist_on_nodes(N, nodes)
-    subset_dists = dists[nodes].T[nodes].T
-    if edge_priors:
-        # if we are recieving an estimate for the Graph Laplacian
-        # ...approximate steiner with local shortest path dists. 
-        subset_dists = adjusted_forest_dists(subset_dists, beta=beta)
-    tree = sparse.COO.from_scipy_sparse(minimum_spanning_tree(subset_dists))
-    tree_E = sq_ij_e(tree.shape[0], tree.coords)
-    return all_E[tree_E]
+# def _pursue_tree_basis(dists, nodes, edge_priors=False, beta=0.001):
+#     N = dists.shape[0]
+#     all_E = complete_edgelist_on_nodes(N, nodes)
+#     subset_dists = dists[nodes].T[nodes].T
+#     if edge_priors:
+#         # if we are recieving an estimate for the Graph Laplacian
+#         # ...approximate steiner with local shortest path dists. 
+#         subset_dists = adjusted_forest_dists(subset_dists, beta=beta)
+#     tree = sparse.COO.from_scipy_sparse(minimum_spanning_tree(subset_dists))
+#     tree_E = sq_ij_e(tree.shape[0], tree.coords)
+#     return all_E[tree_E]
+
+def _pursue_tree_basis(edge_candidates, edge_weights, edge_priors=False, beta=0.001):
+
+    if edge_candidates.size()==0:
+        # i.e. 0 or 1 nodes were activated (no relationships possible) 
+        return edge_candidates
+    else: 
+        # get MST/steiner estimate for true edge activations
+        subset_dists = flat2sq(edge_weights)
+        if edge_priors:
+            # i.e. weights are edge probabilities, not node distances
+            # ...we are recieving an estimate for the Graph Laplacian
+            # need to approximate steiner with local shortest path dists. 
+            subset_dists = adjusted_forest_dists(subset_dists, beta=beta)
+        tree_edges = sq2flat(minimum_spanning_tree(subset_dists)).coords[0]
+
+        return edge_candidates[tree_edges]
 
 
 def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta=0.001):
     """resample with a kernel bootstrap on MSTs in a manifold"""
+    N_obs = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if (prior_dists is None) and (not edge_priors):
-        prior_dists = -np.log(ochiai(X, pseudocts=0.5))
 
+        prior_dists = -np.log(ochiai(X, pseudocts=0.5))
     elif edge_priors:
         # TODO: enforce laplacian!
         # assert np.allclose(prior_dists.sum(axis=0),0)
         pass
         
+    prior_weights = sq2flat(prior_dists)
     # N_obs = X.toarray() if issparse(X) else X
-    N_obs = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
-    N_activations = csr_rows_idx(N_obs.tocsr())
+    # N_activations = csr_rows_idx(N_obs.tocsr())
+
+    
+    activations = Parallel(n_jobs=-1, backend="loky")(
+        delayed(_pursue_tree_basis)(edges, edges)
+    )
+    for edges in binary_feature_edge_cliques(N_obs):
+        
     E_activations = [
         _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
         if nodes.size>0 else nodes for nodes in N_activations
