@@ -3,8 +3,8 @@ from typing import TypeAlias
 import numpy as np
 from jaxtyping import Int, Shaped
 from plum import dispatch
-from sparse import COO, einsum, triu
 from scipy.spatial.distance import squareform
+from sparse import COO, einsum, triu
 
 Idx: TypeAlias = Int[np.ndarray, "*elems"]
 
@@ -60,11 +60,10 @@ def sq2flat(A: Shaped[COO, "*batch n n"]) -> Shaped[COO, "*batch e"]:
     n = min(A.shape[-1], A.shape[-2])
     a = triu(A, k=1)  # wow this works with ndim>2 as well!
     coords = sq_ij_e(n, a.coords[-2:, :])  # which means I can too!
-    shape = int(n * n / 2 - n / 2)
-
+    shape = (int(n * n / 2 - n / 2),)
     if a.ndim > 2:  # maybe there's a slicing/indexing way to make implicit
         coords = np.vstack([a.coords[0], coords])
-        shape = (a.shape[0], shape)
+        shape = (a.shape[0], shape[0])
     return COO(shape=shape, coords=coords, data=a.data)
 
 
@@ -99,5 +98,4 @@ def csr_rows_idx(matrix):
 
 def binary_feature_edge_cliques(X):
     X_edgespace = sq2flat(einsum("bi,bo->bio", X, X)).tocsr()
-    for row in csr_rows_idx(X_edgespace):
-        yield row
+    yield from csr_rows_idx(X_edgespace)

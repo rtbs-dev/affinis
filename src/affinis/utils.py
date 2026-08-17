@@ -54,7 +54,9 @@ def _norm_diag(A: Shaped[COO, "n n"], psdcts=0.0) -> Shaped[COO, "n n"]:
     norm = np.sqrt(d_a * d_b)
 
     return flat2sq(
-        COO(data=pseudocount(psdcts)(A_e.data, norm), coords=A_e.coords, shape=A_e.shape)
+        COO(
+            data=pseudocount(psdcts)(A_e.data, norm), coords=A_e.coords, shape=A_e.shape
+        )
     ) + eye(d.size)
 
 
