@@ -8,7 +8,7 @@ from plum import dispatch
 # from bidict import frozenbidict
 from scipy.linalg import lapack
 from scipy.sparse import coo_array
-from sparse import COO, diagonal, eye
+from sparse import COO, diagonal, eye, diagonalize
 
 from .edgespace import flat2sq, sq2flat, sq_e_ij, sq_ij_e
 from .priors import pseudocount
@@ -188,12 +188,18 @@ def n_nodes_from_edges(e):
     return int((np.sqrt(8 * e.shape[0] + 1) + 1) // 2)
 
 
-def edge_weights_to_laplacian(e):
-    A = _sq(e)
+@dispatch(precedence=1)
+def edge_weights_to_laplacian(e: Shaped[np.ndarray, "e"]) -> Shaped[np.ndarray, "n n"]:
+    A = flat2sq(e)
     D = np.diag(A.sum(axis=0))
     return D - A
 
-
+@dispatch
+def edge_weights_to_laplacian(e: Shaped[COO, "e"]) -> Shaped[COO, "n n"]: # type:ignore
+    A = flat2sq(e)
+    D = diagonalize(A.sum(axis=0))
+    return D-A
+    
 def edge_mask_to_laplacian(e):
     """given a masked array of edge-weights, form a laplacian matrix with a -1 if
     the edge wasn't filtered.

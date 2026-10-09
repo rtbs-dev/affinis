@@ -68,7 +68,7 @@ def coocur_prob(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
 
-    cts = _gram(X, X)
+    cts = X.T@X
     tot = X.shape[0]
     return pseudocount(pseudocts)(cts, tot)
 
@@ -474,14 +474,18 @@ def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta
 
     prior_weights = sq2flat(prior_dists)
 
-    E_activations = Parallel(n_jobs=-1, backend="loky")(
-        delayed(_pursue_tree_basis)(edges, prior_weights[edges])
-        for edges in binary_feature_edge_cliques(N_obs)
-    )
-
-    # E_activations = [_pursue_tree_basis(edges, prior_weights[edges], edge_priors=edge_priors, beta=beta)
-    #     for edges in binary_feature_edge_cliques(N_obs)
-    # ]
+    if X.shape[0]>=1000:
+        E_activations = Parallel(n_jobs=-1, backend="loky")(
+            delayed(_pursue_tree_basis)(edges, prior_weights[edges])
+            for edges in binary_feature_edge_cliques(N_obs)
+        )
+    else:
+        E_activations = [
+            _pursue_tree_basis(
+                edges, prior_weights[edges],
+                edge_priors=edge_priors, beta=beta
+            ) for edges in binary_feature_edge_cliques(N_obs)
+        ]
 
     # E_activations = [
     #     _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
@@ -531,12 +535,12 @@ def forest_pursuit_cts(X: FeatMat, prior_dists: SimsMat | None = None) -> SimsMa
 
 def expected_forest_maximization(
     X: FeatMat,
-    prior_struct: SimsMat = None,
+    prior_struct: SimsMat|None = None,
     beta: float = 0.001,
     eps: float = 1e-5,
     max_iter: int = 100,
     verbose: bool = False,
-) -> SimsMat:
+) -> SimsMat|(SimsMat,int):
     """Expectation Maximization Scheme to recover structure.
 
     Shown to have minor accuracy improvement over vanilla Forest Pursuit,
@@ -558,18 +562,18 @@ def expected_forest_maximization(
 
     """
     if prior_struct is None:
-        e_prob = _sq(forest_pursuit_edge(X))
+        e_prob = sq2flat(forest_pursuit_edge(X)).todense()
         prior_struct = _norm_diag(edge_weights_to_laplacian(e_prob))
 
-    uv_cts = _sq(_gram(X, X))
+    uv_cts = sq2flat(_gram(X,X))
 
     diff, it = 1.0, 0
-
+    # pseudct = pseudocount("zero-sum")
     while (diff > eps) and (it < max_iter):
         it += 1
         e_cts = _spanning_forests_obs_bootstrap(
             X, prior_dists=prior_struct, edge_priors=True, beta=beta
-        ).sum(axis=0)
+        ).sum(axis=0).todense()
         e_prob_new = e_prob + (e_cts - e_prob * uv_cts) / (
             uv_cts + 1
         )  # posterior for Beta(a, 1-a)
@@ -578,9 +582,9 @@ def expected_forest_maximization(
         prior_struct = _norm_diag(edge_weights_to_laplacian(e_prob))
 
     if verbose:
-        return _sq(e_prob), it
+        return flat2sq(e_prob), it
     else:
-        return _sq(e_prob)
+        return flat2sq(e_prob)
 
 
 def forest_pursuit_edge(
@@ -597,8 +601,9 @@ def forest_pursuit_edge(
 
     Returns: probability of edge traversal given a co-occurrence.
     """
-    e_cts = sq2flat(forest_pursuit_cts(X, prior_dists=prior_dists))
-    uv_cts = sq2flat(_gram(X, X))
+    Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
+    e_cts = sq2flat(forest_pursuit_cts(Xsp, prior_dists=prior_dists))
+    uv_cts = sq2flat(Xsp.T@Xsp)
     # e_prob = (e_cts + pseudocts) / (uv_cts + 2 * pseudocts)
     e_prob = pseudocount(pseudocts)(e_cts, uv_cts)
     return flat2sq(e_prob)
@@ -626,15 +631,17 @@ def forest_pursuit_interaction(
 
     """
     # TODO: check X and precalc_cts have correct dim
+    
+    Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if not precalc_prob:
-        e_prob = _sq(
-            forest_pursuit_edge(X, prior_dists=prior_dists, pseudocts=pseudocts)
+        e_prob = sq2flat(
+            forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts)
         )
     else:
-        e_prob = _sq(precalc_prob)
-    uv_prob = _sq(coocur_prob(X, pseudocts=pseudocts))
+        e_prob = sq2flat(precalc_prob)
+    uv_prob = sq2flat(coocur_prob(Xsp, pseudocts=pseudocts))
     e_margP = e_prob * uv_prob
-    return _sq(e_margP)
+    return flat2sq(e_margP)
 
 
 def forest_pursuit(
@@ -682,15 +689,17 @@ def forest_pursuit(
           if that mode is selected.
 
     """
+    Xsp= sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
+
     match mode:
         case "edge-prob":
-            return forest_pursuit_edge(X, prior_dists=prior_dists, pseudocts=pseudocts)
+            return forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts)
         case "counts":
-            return forest_pursuit_cts(X, prior_dists=prior_dists)
+            return forest_pursuit_cts(Xsp, prior_dists=prior_dists)
         case "forest-max":
-            return expected_forest_maximization(X, **efm_kws)
+            return expected_forest_maximization(Xsp, **efm_kws)
         case "interaction":
-            return forest_pursuit_interaction(X, prior_dists, pseudocts=pseudocts)
+            return forest_pursuit_interaction(Xsp, prior_dists, pseudocts=pseudocts)
 
 
 def _forest_pursuit_normdegs(X, prior_dists=None, pseudocts="min-connect"):

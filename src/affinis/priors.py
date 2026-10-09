@@ -4,10 +4,11 @@ from plum import dispatch
 # from numbers import Number
 from typing import Callable, Literal, TypeAlias
 import numpy as np
-from jaxtyping import Num
+from jaxtyping import Num, Shaped
+from sparse import COO
 from affinis.types import Number, PsdCts, Arr
 
-ElemWise: TypeAlias = Num[np.ndarray, "*elems"]
+ElemWise: TypeAlias = Shaped[np.ndarray, "*elems"]
 """generic batched typed array"""
 
 ElemReduceFunc: TypeAlias = Callable[[ElemWise, ElemWise], ElemWise]
@@ -23,32 +24,82 @@ def _safe_div(num: ElemWise, den: ElemWise) -> ElemWise:
     )
 
 
+@dispatch(precedence=1)
+def beta_binom_post(succs: ElemWise, trial: ElemWise|Number, a: float, b: float) -> ElemWise:
+    return np.divide(
+        succs+a,
+        trial+a+b,
+        out=np.zeros_like(succs, dtype=float),
+        where=(trial!=0),
+    )
+
+@dispatch
+def beta_binom_post(  #type:ignore
+    succs: Shaped[COO, "*elems"],
+    trial: Shaped[COO, "*elems"],
+    a:float, b:float
+)-> Shaped[COO, "*elems"]:
+    s_flat = np.ravel_multi_index(succs.coords, trial.shape)
+    t_flat = np.ravel_multi_index(trial.coords, trial.shape)
+    t_idx = np.searchsorted(t_flat, s_flat)
+    assert np.all(
+        (t_idx < len(t_flat)) &
+        (t_flat[t_idx] == s_flat)
+    ), "Binomial assumption violated: S ⊄ T"
+    # align_succs = succs[tuple(trial.coords)]
+    align_succs = np.zeros_like(trial.data)
+    align_succs[t_idx] = succs.data
+    sparse_post = beta_binom_post(align_succs, trial.data, a, b)
+    return COO(
+        coords=trial.coords,
+        data=sparse_post,
+        shape=trial.shape,
+        fill_value = a/(a+b)
+    )
+
+@dispatch
+def beta_binom_post(  #type:ignore
+    succs: Shaped[COO, "*elems"],
+    trial: Number,
+    a: float, b:float,
+)-> Shaped[COO, "*elems"]:
+    sparse_post = beta_binom_post(succs.data, trial, a, b)
+    return COO(
+        coords=succs.coords,
+        data=sparse_post,
+        shape=succs.shape,
+        fill_value=a/(a+b)
+    )
+
+    # lower = den.data + (a+b)
+    # fill_prob = a/(a+b)
+    # post_data = num.data+
+    
+    
+
+
 @dispatch
 def pseudocount(prior: Number) -> ElemReduceFunc:
     """Additive smoothing binomial with symmetric beta prior (a = b)"""
 
     def _beta_binom_post(num: ElemWise, den: ElemWise) -> ElemWise:
-        return _safe_div(
-            num + prior,
-            den + 2 * prior,
-        )
-
+        return beta_binom_post(num,den,prior,2*prior)
     return _beta_binom_post
 
 
 @dispatch
-def pseudocount(prior: tuple[Number, Number]) -> ElemReduceFunc:
+def pseudocount(prior: tuple[Number, Number]) -> ElemReduceFunc: # type:ignore
     """additive smoothing binomial with (possibly) asymmetric prior"""
     a, b = prior
 
     def _beta_binom_post(num: ElemWise, den: ElemWise) -> ElemWise:
-        return _safe_div(num + a, den + a + b)
+        return beta_binom_post(num,den,a,b)
 
     return _beta_binom_post
 
 
 @dispatch(precedence=1)
-def pseudocount(prior: Literal["min-connect"]) -> ElemReduceFunc:
+def pseudocount(prior: Literal["min-connect"]) -> ElemReduceFunc:  # type:ignore
     r"""additive smoothing binomial with asymmetric prior biasing sparsity
 
     NOTE: Requires triangular-number `n` (i.e. lower triangles of square matrix).
@@ -83,15 +134,16 @@ def pseudocount(prior: Literal["min-connect"]) -> ElemReduceFunc:
     """
 
     def _beta_binom_post(num: ElemWise, den: ElemWise) -> ElemWise:
+
         n_edges = num.shape[0]  # in complete graph
         n = (1 + np.sqrt(1 + 8 * n_edges)) / 2.0  # nodes in complete graph
-        return _safe_div(num + 2.0 / n, den + 1.0)
+        return beta_binom_post(num, den, 2./n, 1-2./n)
 
     return _beta_binom_post
 
 
 @dispatch
-def pseudocount(prior: tuple[Literal["zero-sum"], Number]) -> ElemReduceFunc:
+def pseudocount(prior: tuple[Literal["zero-sum"], Number]) -> ElemReduceFunc:  # type:ignore
     """TODO derive the approx-cts for projection onto simplex
 
     unlike the other methods, this directly returns the `a` values for a
@@ -104,38 +156,39 @@ def pseudocount(prior: tuple[Literal["zero-sum"], Number]) -> ElemReduceFunc:
     # b = 1 - a
 
     def _beta_binom_post(suc: ElemWise, tot: ElemWise) -> ElemWise:
-        c = (suc - a * tot) / (tot + 1)
-        a_n = a + c
-        # b_n = 1 - a_n
-        return a_n
-        # return _safe_div(a_n, a_n + b_n)
+        return beta_binom_post(suc, tot, a, 1-a)
+        ## Clever but no longer necessary
+        # c = (suc - a * tot) / (tot + 1)
+        # a_n = a + c
+        # return a_n
 
     return _beta_binom_post
 
 
 @dispatch
-def pseudocount(
+def pseudocount(  # type:ignore
     prior: tuple[Literal["zero-sum"], Literal["min-connect"]],
 ) -> ElemReduceFunc:
     """A combination of a zero-sum (a, 1-a) beta prior and a=2/n for tree-like"""
 
-    def _beta_binom_post(suc: ElemWise, tot: ElemWise) -> ElemWise:
-        n_edges = suc.shape[0]
-        n = (1 + np.sqrt(1 + 8 * n_edges)) / 2.0  # nodes in complete graph
+    # def _beta_binom_post(suc: ElemWise, tot: ElemWise) -> ElemWise:
+    #     n_edges = suc.shape[0]
+    #     n = (1 + np.sqrt(1 + 8 * n_edges)) / 2.0  # nodes in complete graph
+    #     return beta_binom_post(suc, tot, 2./n, 1-2/n.)
+    #     # a = 2 / n
+    #     # b = 1 - a
+    #     c = (suc - a * tot) / (tot + 1)
+    #     a_n = a + c
+    #     # b_n = 1 - a_n
+    #     # return _safe_div(a_n, a_n + b_n)
+    #     return a_n
 
-        a = 2 / n
-        # b = 1 - a
-        c = (suc - a * tot) / (tot + 1)
-        a_n = a + c
-        # b_n = 1 - a_n
-        # return _safe_div(a_n, a_n + b_n)
-        return a_n
-
-    return _beta_binom_post
+    # return _beta_binom_post
+    return pseudocount("min-connect")  # same
 
 
 @dispatch.abstract
-def pseudocount(prior: PsdCts) -> ElemReduceFunc:
+def pseudocount(prior: PsdCts) -> ElemReduceFunc:  # type:ignore
     """Additive binomial smoothing via beta prior (beta-binomial)
 
     Can accept a variety of prior settings, which are described below, and

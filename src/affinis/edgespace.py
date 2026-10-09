@@ -5,7 +5,7 @@ from jaxtyping import Int, Shaped
 from plum import dispatch
 from scipy.spatial.distance import squareform
 from sparse import COO, einsum, triu
-
+from scipy.sparse import sparray
 Idx: TypeAlias = Int[np.ndarray, "*elems"]
 
 
@@ -55,25 +55,34 @@ def sq2flat(A: Shaped[np.ndarray, "n n"]) -> Shaped[np.ndarray, "e"]:
 
 
 @dispatch
-def sq2flat(A: Shaped[COO, "*batch n n"]) -> Shaped[COO, "*batch e"]:
+def sq2flat(A: Shaped[COO, "*batch n n"]) -> Shaped[COO, "*batch e"]: #type:ignore
     """New sparse+batched implementation"""
     n = min(A.shape[-1], A.shape[-2])
-    a = triu(A, k=1)  # wow this works with ndim>2 as well!
-    coords = sq_ij_e(n, a.coords[-2:, :])  # which means I can too!
-    shape = (int(n * n / 2 - n / 2),)
-    if a.ndim > 2:  # maybe there's a slicing/indexing way to make implicit
-        coords = np.vstack([a.coords[0], coords])
-        shape = (a.shape[0], shape[0])
-    return COO(shape=shape, coords=coords, data=a.data)
+    mask = A.coords[-1, :] > A.coords[-2, :]
+    batch_coords = A.coords[:-2, mask]
+    edge_coords = sq_ij_e(n, (A.coords[-2, mask], A.coords[-1, mask]))
+    coords = np.vstack([batch_coords, edge_coords])
+    shape = (*A.shape[:-2], int(n * (n - 1) / 2))
+    return COO(shape=shape, coords=coords, data=A.data[mask])
+    # a = triu(A, k=1)  # wow this works with ndim>2 as well!
+    # coords = sq_ij_e(n, a.coords[-2:, :])  # which means I can too!
+    # shape = (int(n * n / 2 - n / 2),)
+    # if a.ndim > 2:  # maybe there's a slicing/indexing way to make implicit
+    #     coords = np.vstack([a.coords[0], coords])
+    #     shape = (a.shape[0], shape[0])
+    # return COO(shape=shape, coords=coords, data=a.data)
 
+@dispatch
+def sq2flat(A:sparray):
+    return sq2flat(COO.from_scipy_sparse(A))
 
 @dispatch(precedence=1)
 def flat2sq(e: Shaped[np.ndarray, "e"]) -> Shaped[np.ndarray, "n n"]:
     return squareform(e)
 
 
-@dispatch
-def flat2sq(e: Shaped[COO, "e"]) -> Shaped[COO, "n n"]:
+@dispatch 
+def flat2sq(e: Shaped[COO, "e"]) -> Shaped[COO, "n n"]: # type:ignore
     ## NOT CURRENTLY BATCH-DIM COMPATIBLE
     n = int(np.ceil(np.sqrt(e.shape[0] * 2)))
     # Check that e is of valid dimensions.
