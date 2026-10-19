@@ -12,7 +12,7 @@ from .edgespace import (
     flat2sq,
     sq2flat,
 )
-from .filter import min_connected_filter
+from .filter import threshold_connected
 from .priors import PsdCts, pseudocount
 from .proximity import sinkhorn
 from .types import FeatMat, FPopts, SimsMat
@@ -381,7 +381,7 @@ def high_salience_skeleton(
     d, pred = shortest_path(prior_dists, return_predecessors=True)
     E_obs = np.array(
         [
-            _sq(
+            sq2flat(
                 _sparse_directed_to_symmetric(
                     reconstruct_path(d, p, directed=False).astype(bool)
                 ).toarray()
@@ -391,7 +391,7 @@ def high_salience_skeleton(
     )
     hss = pseudocount(pseudocts)(E_obs.sum(axis=0), E_obs.shape[0])
     # hss = (E_obs.sum(axis=0) + pseudocts) / (E_obs.shape[0] + 2 * pseudocts)
-    return _sq(hss)
+    return flat2sq(hss)
 
 
 def doubly_stochastic_filter(
@@ -420,10 +420,11 @@ def doubly_stochastic_filter(
     if prior_dists is None:
         prior_dists = -np.log(ochiai(X, pseudocts=pseudocts))
 
-    kern = _sq(np.exp(-_sq(prior_dists) / reg))
+    kern = flat2sq(np.exp(-sq2flat(prior_dists) / reg))
     ds = sinkhorn(kern, **sink_kws)
 
-    return _sq(min_connected_filter(_sq(ds)))
+    # return _sq(min_connected_filter(_sq(ds)))
+    return threshold_connected(ds)
 
 
 # def _pursue_tree_basis(dists, nodes, edge_priors=False, beta=0.001):

@@ -68,7 +68,7 @@ def beta_binom_post(  #type:ignore
         coords=succs.coords,
         data=sparse_post,
         shape=succs.shape,
-        fill_value=a/(a+b)
+        fill_value=a/(trial+a+b)
     )
 
     # lower = den.data + (a+b)

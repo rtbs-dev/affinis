@@ -3,15 +3,17 @@ from matplotlib.axes import Axes
 from matplotlib.collections import PathCollection
 import numpy as np
 from jaxtyping import Num
-from scipy.sparse import coo_array, issparse, sparray
+from sparse import COO, SparseArray
+from plum import convert
+# from scipy.sparse import coo_array, issparse, sparray
 
 
 def hinton(
-    A: Num[np.ndarray | sparray, "a b"],
+    A: Num[COO, "a b"],
     ax: Axes | None = None,
     marker: str = "s",
     update_from: PathCollection | None = None,
-) -> Axes:
+) -> Axes|PathCollection:
     """Draw Hinton diagram for visualizing a 2-D matrix.
 
     This has a significant speed-up over the looping version from the
@@ -25,8 +27,8 @@ def hinton(
       marker: Any valid [`matplotlib.markers`](https://matplotlib.org/stable/api/markers_api.html#module-matplotlib.markers) option.
 
     """
-    A = A if issparse(A) else coo_array(A)
-
+    # A = COO(A) if isinstance(A, SparseArray) else COO.from_numpy(A)
+    A = convert(A, COO)
     i, j = A.coords[1] + 0.5, A.coords[0] + 0.5
     ax = ax if ax is not None else plt.gca()
 

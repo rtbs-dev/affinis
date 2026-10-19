@@ -25,6 +25,7 @@ dependencies = [
     "jaxtyping~=0.3",
     "plum-dispatch~=2.6",
     "contingency-tools~=0.2",
+    "makefun>=1.16.0",
 ]
 
 [project.urls]

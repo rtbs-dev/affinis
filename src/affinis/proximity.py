@@ -41,24 +41,25 @@ def forest_correlation(L: SimsMat, beta=1.0):
     return _norm_diag(forest(L, beta=beta))
 
 
-def sinkhorn(A: SimsMat, i: int = 0, err: float = 1e-6, it_max: int = 1000):
+def sinkhorn(A: SimsMat, i: int = 0, err: float = 1e-6, it_max: int = 500):
     """Make matrix A doubly-stochastic (rows/cols sum to 1), if possible.
 
     Uses sinkhorn-knop (iterated proportional fitting) to project an n x n matrix A
     onto the closest point in the Birkhoff polytope.
 
     """
-    marg_sum = A.sum(0)
-    if np.std(marg_sum) < err:
-        return np.maximum(A, A.T)
-    elif i > it_max:
-        import warnings
+    while i <=it_max:
+        marg_sum = A.sum(0)
+        if np.std(marg_sum.data) < err:
+            return np.maximum(A, A.T)
+        else:
+            A = (A/marg_sum).T
+            i += 1
+            # return sinkhorn((A / marg_sum).T, i=i + 1)
 
-        warnings.warn("sinkhorn iterations did not converge...", RuntimeWarning)
-        return A
-    else:
-        return sinkhorn((A / marg_sum).T, i=i + 1)
-
+    import warnings
+    warnings.warn("sinkhorn iterations did not converge...", RuntimeWarning)
+    return np.maximum(A, A.T)
 
 def bilinear_kern(D: SimsMat) -> SimsMat:
     """

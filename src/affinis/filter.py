@@ -1,13 +1,14 @@
 import numpy as np
 from numpy import ma
 import scipy.sparse as sp
+from sparse import COO
 from .utils import (
     edge_mask_to_laplacian,
     _binary_search_greatest,
     n_nodes_from_edges,
     _sq,
 )
-
+from .edgespace import sq2flat,flat2sq 
 # from functools import partial
 from .types import SimsMat
 
@@ -44,11 +45,11 @@ def min_connected_filter(edge_weights):
         # return check_connected(
         #     edge_mask_to_laplacian(threshold_edges_filter(edge_weights, thres))
         # )
-        A = sp.coo_array(_sq(edge_weights > thres))
+        A = flat2sq(edge_weights > thres)
         bfs = sp.csgraph.breadth_first_tree(A, 0, directed=False)
-        return bfs.sum() == n - 1
+        return bfs.nnz == n - 1
 
-    pos = edge_weights.argsort()
+    pos = edge_weights.coords[0][edge_weights.data.argsort()]
 
     min_idx, min_thres = _binary_search_greatest(
         edge_weights[pos],
@@ -60,6 +61,25 @@ def min_connected_filter(edge_weights):
     # print(pos[min_idx], min_thres)
     return threshold_edges_filter(edge_weights, min_thres)
 
+        
+
+def threshold_value(K: SimsMat, t: float, bin: bool = True) -> SimsMat:
+    """Filter edge-weights below a given value.
+
+    Args:
+      K: square matrix (e.g. kernel) to be thresholded
+      t: cutoff-value
+      bin: whether to binarize the output, or cut-off only.
+    """
+    # edges = sq2flat(K)
+
+    Kthres = K>=t
+    if bin:
+        # return flat2sq((~edges_masked.mask).astype(int))
+        return Kthres
+    else:
+        # return flat2sq(edges_masked.filled(0))
+        return K*Kthres
 
 def threshold_connected(K: SimsMat, bin: bool = True) -> SimsMat:
     """filter edge-weights until the graph is (barely) connected.
@@ -73,27 +93,22 @@ def threshold_connected(K: SimsMat, bin: bool = True) -> SimsMat:
       bin: whether to binarize the output, or cut-off only.
 
     """
-    edges = _sq(K)
-    edges_masked = min_connected_filter(edges)
+    # edges = sq2flat(K)
+    # edges_masked = min_connected_filter(edges)
+    n = K.shape[0]
+    candidates = np.sort(sq2flat(K).data)
+    print(len(candidates))
+    def connected(thres):
+        
+        bfs = sp.csgraph.breadth_first_tree(COO(K, fill_value=0),0,directed=False)
+        return bfs.nnz ==n-1
 
-    if bin:
-        return _sq((~edges_masked.mask).astype(int))
-    else:
-        return _sq(edges_masked.filled(0))
+    min_idx, min_thres = _binary_search_greatest(
+        candidates,
+        connected,
+        0,
+        len(candidates) - n + 1,  # need at least n-1 edges for connected
+    )
+    return threshold_value(K, min_thres, bin=bin)
 
 
-def threshold_value(K: SimsMat, t: float, bin: bool = True) -> SimsMat:
-    """Filter edge-weights below a given value.
-
-    Args:
-      K: square matrix (e.g. kernel) to be thresholded
-      t: cutoff-value
-      bin: whether to binarize the output, or cut-off only.
-    """
-    edges = _sq(K)
-    edges_masked = threshold_edges_filter(edges, t)
-
-    if bin:
-        return _sq((~edges_masked.mask).astype(int))
-    else:
-        return _sq(edges_masked.filled(0))
