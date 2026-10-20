@@ -80,11 +80,12 @@ def coocur_prob(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
 
 def _not(X):
-    if issparse(X):
-        nX = X < coo_array(np.ones(X.shape))
-    else:
-        nX = 1 - X
-    return nX
+    # if issparse(X):
+    #     nX = X < coo_array(np.ones(X.shape))
+    # else:
+    #     nX = 1 - X
+    # return nX
+    return 1-X
 
 
 def _marginal_cts(X):
@@ -92,24 +93,32 @@ def _marginal_cts(X):
 
 
 def _marginal_prob(X: FeatMat, pseudocts: PsdCts = 0.5):
-    # psdct = pseudocount(pseudocts)  #TODO cannot use _sq(num) when num is 1D!!
+    psdct = pseudocount(pseudocts)  #TODO cannot use _sq(num) when num is 1D!!
     # return [psdct(ct, X.shape[0]) for ct in _marginal_cts(X)]
-    return [(ct + pseudocts) / (X.shape[0] + 2 * pseudocts) for ct in _marginal_cts(X)]
+    # return [(ct + pseudocts) / (X.shape[0] + 2 * pseudocts) for ct in _marginal_cts(X)]
+    # ps
+    return [psdct(ct, X.shape[0]) for ct in _marginal_cts(X)]
 
 
 def _contingency_cts(X):
-    nX = _not(X)
-    both = _sq(_gram(X, X))
-    one = _sq(_gram(X, nX))
-    other = _sq(_gram(nX, X))
-    neither = _sq(_gram(nX, nX))
+    # nX = _not(X)
+    G = X.T@X
+    marginal = sparse.diagonal(G)
+    only1 = (marginal - G)
+
+    both = sq2flat(G)
+    one = sq2flat(only1)
+    other = sq2flat(only1.T)
+    neither = X.shape[0]-sq2flat(np.add.outer(marginal, marginal))+both
     return neither, one, other, both
 
 
 def _contingency_prob(X: FeatMat, pseudocts: PsdCts = 0.5):
     psdct = pseudocount(pseudocts)
-    cts = np.vstack(_contingency_cts(X))
-    return [psdct(ct, X.shape[0]) for ct in cts]
+    # cts = np.vstack(_contingency_cts(X))
+    cts = _contingency_cts(X)
+
+    return sparse.stack([psdct(ct, X.shape[0]) for ct in cts])
 
 
 def _binary_contingency(X):
@@ -141,7 +150,7 @@ def odds_ratio(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
       pseudocts: additive smoothing parameter
     """
     a, b, c, d = _contingency_prob(X, pseudocts=pseudocts)
-    return _sq(a * d / (b * c)) + np.eye(X.shape[1])
+    return flat2sq(a * d / (b * c)) + np.eye(X.shape[1])
 
 
 def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -169,23 +178,23 @@ def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Returns:
 
     """
-    Pxy = np.array(_contingency_prob(X, pseudocts=pseudocts))
+    Pxy = _contingency_prob(X, pseudocts=pseudocts)
 
     # Pxy = np.vstack([sq(i) for i in cond_table])
     yes, no = _marginal_prob(X)
     # TODO had to hard-code 0.5 for now :(, pseudocts=pseudocts)
 
     # print(Pxy.sum(axis=1))
-    PxPy = np.vstack(
+    PxPy = sparse.COO(sparse.stack(
         [
-            _sq(np.multiply.outer(a, b))
+            sq2flat(np.multiply.outer(a, b))
             for a, b in [(no, no), (yes, no), (no, yes), (yes, yes)]
         ]
-    )
-    entropy = -np.vstack([x * np.log(x) for x in (yes, no)]).sum(axis=0)
+    ), fill_value=yes.fill_value**2)
+    entropy = -sparse.stack([x * np.log(x) for x in (yes, no)]).sum(axis=0)
 
     MI_pairs = (Pxy * np.log(Pxy) - Pxy * np.log(PxPy)).sum(axis=0)
-    return _sq(MI_pairs) + np.diag(entropy)
+    return flat2sq(MI_pairs) + sparse.diagonalize(entropy)
     # return sq(entropy(Pxy, PxPy))
 
 
@@ -203,13 +212,12 @@ def chow_liu(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
     # return sq(sq(minimum_spanning_tree(-MI_binary(X)).todense()))
-    return _sq(
-        _sq(
-            minimum_spanning_tree(
-                np.exp(-(mutual_information(X, pseudocts=pseudocts)))
-            ).todense()
+    return _sparse_directed_to_symmetric(
+        minimum_spanning_tree(
+            sparse.COO(np.exp(-mutual_information(X, pseudocts=pseudocts)), fill_value=0)
         )
     )
+    
 
 
 def yule_y(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -379,16 +387,14 @@ def high_salience_skeleton(
     if prior_dists is None:
         prior_dists = np.abs(-np.log(ochiai(X, pseudocts=pseudocts)))
     d, pred = shortest_path(prior_dists, return_predecessors=True)
-    E_obs = np.array(
+    E_obs = sq2flat(sparse.stack(
         [
-            sq2flat(
-                _sparse_directed_to_symmetric(
-                    reconstruct_path(d, p, directed=False).astype(bool)
-                ).toarray()
+            _sparse_directed_to_symmetric(
+                sparse.COO.from_scipy_sparse(reconstruct_path(d, p, directed=False).astype(bool))
             )
             for p in pred
         ]
-    )
+    ))
     hss = pseudocount(pseudocts)(E_obs.sum(axis=0), E_obs.shape[0])
     # hss = (E_obs.sum(axis=0) + pseudocts) / (E_obs.shape[0] + 2 * pseudocts)
     return flat2sq(hss)

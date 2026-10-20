@@ -97,7 +97,7 @@ def threshold_connected(K: SimsMat, bin: bool = True) -> SimsMat:
     # edges_masked = min_connected_filter(edges)
     n = K.shape[0]
     candidates = np.sort(sq2flat(K).data)
-    print(len(candidates))
+    # print(len(candidates))
     def connected(thres):
         
         bfs = sp.csgraph.breadth_first_tree(COO(K, fill_value=0),0,directed=False)

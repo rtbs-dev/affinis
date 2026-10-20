@@ -49,11 +49,12 @@ def sinkhorn(A: SimsMat, i: int = 0, err: float = 1e-6, it_max: int = 500):
 
     """
     while i <=it_max:
-        marg_sum = A.sum(0)
-        if np.std(marg_sum.data) < err:
+        marginals = A.sum(0)
+        if np.std(marginals.data) < err:
             return np.maximum(A, A.T)
         else:
-            A = (A/marg_sum).T
+            marginals.data = 1/marginals.data
+            A = (A*marginals).T
             i += 1
             # return sinkhorn((A / marg_sum).T, i=i + 1)
 

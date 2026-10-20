@@ -123,11 +123,12 @@ def _upper_triangular_to_symmetric(ut):
 
 
 def _sparse_directed_to_symmetric(s):
-    """OVERWRITES IN-PLACE"""
-    s = s.todok()
-    row, col = s.nonzero()
-    s[col, row] = s[row, col]
-    return s.tocsr()
+    # """OVERWRITES IN-PLACE"""
+    # s = s.todok()
+    # row, col = s.nonzero()
+    # s[col, row] = s[row, col]
+    # return s.tocoo()
+    return np.maximum(s, s.T)
 
 
 def _fast_PD_inverse(m):
