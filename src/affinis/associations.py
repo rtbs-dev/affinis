@@ -326,8 +326,9 @@ def hyperbolic_project(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
 
-    reweight = _safe_div(X.T, (X.sum(axis=1) - 1)).T  # right-stochastic bipartite
-    return _gram(reweight, X)
+    # reweight = _safe_div(X.T, (X.sum(axis=1) - 1)).T  # right-stochastic bipartite
+    reweight = X.T@sparse.diagonalize(np.ma.divide(1,(X.sum(axis=1)-1).todense()).filled(0))
+    return reweight@X
 
 
 def resource_project(
