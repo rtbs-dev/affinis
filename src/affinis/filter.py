@@ -100,14 +100,15 @@ def threshold_connected(K: SimsMat, bin: bool = True) -> SimsMat:
     # print(len(candidates))
     def connected(thres):
         
-        bfs = sp.csgraph.breadth_first_tree(COO(K, fill_value=0),0,directed=False)
+        bfs = sp.csgraph.breadth_first_tree(threshold_value(K,thres),0,directed=False)
         return bfs.nnz ==n-1
 
     min_idx, min_thres = _binary_search_greatest(
         candidates,
         connected,
         0,
-        len(candidates) - n + 1,  # need at least n-1 edges for connected
+        # len(candidates) - n + 1,  # need at least n-1 edges for connected
+        candidates.shape[0]-1,
     )
     return threshold_value(K, min_thres, bin=bin)
 

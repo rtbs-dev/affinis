@@ -430,7 +430,7 @@ def doubly_stochastic_filter(
     ds = sinkhorn(kern, **sink_kws)
 
     # return _sq(min_connected_filter(_sq(ds)))
-    return threshold_connected(ds)
+    return threshold_connected(ds, bin=False)
 
 
 # def _pursue_tree_basis(dists, nodes, edge_priors=False, beta=0.001):
