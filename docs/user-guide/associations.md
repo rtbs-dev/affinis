@@ -13,6 +13,7 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
+from sparse import COO
 plt.rc('figure', figsize=(4.0, 3.0))
 sns.set_theme(style='white')
 imgpath=Path('../../docs/user-guide/img/')
@@ -25,12 +26,12 @@ This can represent a document-term matrix, user-preference (recommender) data, o
 ```python
 n_cols=15
 n_rows=30
-B = nx.bipartite.random_graph(n_cols,n_rows, .25, seed=2)
+B = nx.bipartite.random_graph(n_cols,n_rows, .25, seed=42)
 n = list(B.nodes)[n_cols:]
 
-X = nx.bipartite.biadjacency_matrix(B, n).toarray()
+X = COO.from_scipy_sparse(nx.bipartite.biadjacency_matrix(B, n))
 plt.figure(figsize=(4,7))
-plt.spy(X, marker='s', color='k')
+plt.spy(X.to_scipy_sparse(), marker='s', color='k')
 ax = plt.gca()
 sns.despine(left=True, bottom=True)
 ax.xaxis.set_label_position('top') 
@@ -64,7 +65,7 @@ Intuitively, such an inner product returns the co-occurrence counts of each feat
 
 ```python
 cooc = X.T@X
-sns.heatmap(cooc, square=True)
+sns.heatmap(cooc.todense(), square=True)
 plt.title('Co-occurrence Counts')
 plt.savefig('../../docs/user-guide/img/cooc.webp')
 ```
@@ -84,9 +85,9 @@ coo = aff.coocur_prob(X)
 cos = aff.ochiai(X)
 
 f,ax = plt.subplots(ncols=2, figsize=(6.5,2.5), sharey=True)
-sns.heatmap(coo,ax=ax[0], square=True)
+sns.heatmap(coo.todense(),ax=ax[0], square=True)
 ax[0].set_title('Co-occurrence Prob.')
-sns.heatmap(cos,ax=ax[1], square=True)
+sns.heatmap(cos.todense(),ax=ax[1], square=True)
 ax[1].set_title('Cosine Sim.')
 plt.savefig('../../docs/user-guide/img/cooc-prob.webp')
 ```
@@ -113,12 +114,72 @@ These methods require having the original data, since they re-weight individual 
 See our documentation on [Hyperbolic Projections][affinis.associations.hyperbolic_project] and [Resource Allocation][affinis.associations.resource_project]
 
 ```python
+from sparse import diagonalize
+from affinis.edgespace import sq2flat, flat2sq
+# fwd = X.T@diagonalize(np.ma.divide(1,X.sum(axis=1).todense()).filled(0))
+Di = diagonalize(np.ma.divide(1,X.sum(axis=1).todense()+1).filled(0))
+Dj = diagonalize(np.ma.divide(1,X.sum(axis=0).todense()+1).filled(0))
+
+P = X.T @ Di @ X @ Dj
+from affinis.priors import pseudocount
+# sq2flat(den)
+# den
+# pseudocount(0.5)(num,den)
+# sq2flat(num),sq2flat(den)
+sns.heatmap(np.maximum(P, P.T).todense())
+```
+
+```python
+import numpy as np
+alpha = 0.1
+beta=1
+# --- 1. Compute the smoothed scaling vectors (1D arrays) ---
+# row_den and col_den are shape (N,) and (M,) respectively
+d_i = 1.0 / (X.sum(axis=1).todense() + alpha + beta)
+d_j = 1.0 / (X.sum(axis=0).todense() + alpha + beta)
+
+# Scalar tracking the global volume of sample priors
+S_i = np.sum(d_i)
+
+# --- 2. Compute Term 1 (Strictly Sparse Matrix) ---
+# X.T.multiply scales columns of X.T (which scales rows of X)
+term1_sparse = X.T@diagonalize(d_i) @ X@diagonalize(d_j)
+
+# Convert ONLY the final M x M feature-feature result to dense
+Target_dense = term1_sparse.todense()
+
+# --- 3. Compute Low-Rank Vectors (Shape M,) ---
+# Term 2 Left Vector: alpha * X.T @ d_i
+u2 = alpha * (X.T @ d_i)
+
+# Term 3 Right Vector: alpha * (d_i @ X @ Dj)
+# Note: d_i @ X yields a (M,) vector, which we then scale by d_j
+v3 = alpha * (d_i @ X) * d_j
+
+# Term 4 Left Vector Constant: alpha^2 * S_i
+u4_scalar = (alpha**2) * S_i
+
+# --- 4. Blast the Low-Rank additions directly into the Dense Matrix ---
+# Term 2: u2 outer product d_j
+Target_dense += np.outer(u2, d_j)
+
+# Term 3: 1_M outer product v3 (Broadcasts v3 across all rows)
+Target_dense += v3[None, :]
+
+# Term 4: u4_scalar * 1_M outer product d_j (Broadcasts scaled d_j across all rows)
+Target_dense += u4_scalar * d_j[None, :]
+
+
+sns.heatmap(np.maximum(Target_dense, Target_dense.T))
+```
+
+```python
 hyp = aff.hyperbolic_project(X)
 rsc = aff.resource_project(X)
 
 f,ax = plt.subplots(ncols=2, figsize=(6.5,2.5), sharey=True)
-sns.heatmap(hyp,ax=ax[0], square=True)
-sns.heatmap(rsc,ax=ax[1], square=True)
+sns.heatmap(hyp.todense(),ax=ax[0], square=True)
+sns.heatmap(rsc.todense(),ax=ax[1], square=True)
 ax[0].set_title('Hyperbolic Proj.')
 ax[1].set_title('Resource Allocation')
 plt.savefig('../../docs/user-guide/img/bi-proj.webp')
@@ -144,8 +205,8 @@ hss = aff.high_salience_skeleton(X)
 dsf = aff.doubly_stochastic_filter(X, reg=0.2)
 
 f,ax = plt.subplots(ncols=2, figsize=(6.5,2.5), sharey=True)
-sns.heatmap(hss,ax=ax[0], square=True)
-sns.heatmap(dsf,ax=ax[1], square=True)
+sns.heatmap(hss.todense(),ax=ax[0], square=True)
+sns.heatmap(dsf.todense(),ax=ax[1], square=True)
 ax[0].set_title('High-Salience Skeleton')
 ax[1].set_title('Doubly-Stochastic Filter')
 plt.savefig(imgpath/'backbones.webp')
@@ -161,9 +222,11 @@ Alternatively, we might try to discover an underlying **probabilistic graphical 
 ```python
 clt = aff.chow_liu(X)
 
-sns.heatmap(clt, square=True)
+sns.heatmap(clt.todense(), square=True)
 plt.title('Chow-Liu Tree');
 plt.savefig(imgpath/'chow-liu-tree.webp')
+
+
 ```
 
 ![Chow-Liu Tree](img/chow-liu-tree.webp)
@@ -180,7 +243,7 @@ This puts it somewhere between the previously discussed association measures (co
 ```python
 fps = aff.forest_pursuit(X)
 
-sns.heatmap(fps, square=True)
+sns.heatmap(fps.todense(), square=True)
 plt.title('Forest Pursuit (edge prob.)')
 plt.savefig(imgpath/'fp.webp')
 ```
@@ -214,7 +277,7 @@ methods = {
     'odds-ratio': aff.odds_ratio(X),
     'Yule\'s Y':aff.yule_y(X),
     'Hyperbolic Proj.': hyp,
-    'Resource Alloc.':rsc,
+    # 'Resource Alloc.':rsc,
 }
 f,axs = plt.subplots(nrows=3, ncols=3, figsize=(8,8))
 

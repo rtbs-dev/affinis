@@ -1,7 +1,7 @@
 import numpy as np
+import sparse
 from .proximity import forest
 from .utils import _norm_diag
-
 
 def bilinear_dists(K):
     r"""symmetric bilinear form associated with kernel K
@@ -32,7 +32,7 @@ def bilinear_dists(K):
     Returns: bilinear distances induced by K
 
     """
-    k_ii = np.diag(K)
+    k_ii = sparse.diagonal(K)
     return np.add.outer(k_ii, k_ii) / 2.0 - K
 
 

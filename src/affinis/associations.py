@@ -239,7 +239,7 @@ def yule_y(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
     a, b, c, d = _contingency_prob(X, pseudocts=pseudocts)
-    return _sq(((ad := np.sqrt(a * d)) - (bc := np.sqrt(b * c))) / (ad + bc))
+    return flat2sq(((ad := np.sqrt(a * d)) - (bc := np.sqrt(b * c))) / (ad + bc))
     # return ((sor:=np.sqrt(OR))-1)/(sor+1)
     # return ((ad:=np.sqrt(both*neither))-(bc:=np.sqrt(one*other)))/(ad+bc)
 
@@ -261,7 +261,7 @@ def yule_q(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
     a, b, c, d = _contingency_prob(X, pseudocts=pseudocts)
-    return _sq(((ad := a * d) - (bc := b * c)) / (ad + bc))
+    return flat2sq(((ad := a * d) - (bc := b * c)) / (ad + bc))
 
 
 def ochiai(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -342,10 +342,10 @@ def resource_project(
     Can be interpreted as one step of iterative proportional fitting on the
     bipartite adjacency matrix.
 
-    NOTE: For additive smoothing to work, we assume no smoothing is needed
-    for the "forward" projection (features->observations), since we assume
-    all observations have some feature participation,
-    while some features may have no (observed) observations.
+    Note: passing a pseudocount currently does not have an effect,
+    as there is not a trivial way to interpret this bipartite projection
+    as a probability.
+    
 
     By default, we symmetrize with "maximum", meaning that association is
     considered as the strongest of the directions it could take. This
@@ -359,16 +359,18 @@ def resource_project(
     Returns: symmetrized "resource projection" similarities
 
     """
-    psdct_func = pseudocount(pseudocts)
-
-    fwd = _safe_div(X.T, X.sum(axis=1)).T  # right-stochastic bipartite
+    # psdct_func = pseudocount(pseudocts)
+    
+    Di = sparse.diagonalize(np.ma.divide(1,X.sum(axis=1).todense()).filled(0))
+    # fwd = _safe_div(X.T, X.sum(axis=1)).T  # right-stochastic bipartite
     # bwd = psdct_func(X, X.sum(axis=0))
 
     # P = _gram(((X.T) / (X.sum(axis=1))).T, ((X) / (X.sum(axis=0))))
-    num = _gram(X, fwd)  # project back
+    # num = fwd@X  # project back
     # den = np.multiply.outer(X.sum(axis=0), np.ones(X.shape[1]))
-    den = X.sum(axis=0)  # normalized by node occurrences (bipartite degree)
-    P = psdct_func(num, den)
+    Dj= sparse.diagonalize(np.ma.divide(1,X.sum(axis=0).todense()).filled(0))
+    # P = num@den
+    P = X.T@Di@X@Dj
     return sym_func(P, P.T)
 
 
