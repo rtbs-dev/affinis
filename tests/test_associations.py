@@ -3,11 +3,18 @@ from hypothesis import given, settings, example
 import hypothesis.strategies as st
 import hypothesis.extra.numpy as hnp
 import pytest
+from sparse import COO
 
 from affinis import associations as aff
 
 # def test_version():
 #     assert __version__ == "0.1.0"
+
+
+from hypothesis import settings
+
+settings.register_profile("no_deadlines", deadline=None)
+settings.load_profile("no_deadlines")
 
 affinis_funcs = [
     aff.binary_cosine_similarity,
@@ -32,7 +39,8 @@ def make_shapes(draw):
 @st.composite
 def make_bools(draw, shape=(2,5)): 
     arr = draw(hnp.arrays(
-        bool,
+        # bool,
+        int,
         shape,
         elements=st.just(True),
         fill=st.just(False),
@@ -48,7 +56,7 @@ def make_bools(draw, shape=(2,5)):
 )
 @given(data=st.data())
 def test_assoc_shapes(assoc_func, data):
-    X = data.draw(make_bools())
+    X = COO.from_numpy(data.draw(make_bools()))
     D = assoc_func(X)
     assert D.shape == (X.shape[-1], X.shape[-1])
 

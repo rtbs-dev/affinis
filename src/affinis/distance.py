@@ -32,7 +32,7 @@ def bilinear_dists(K):
     Returns: bilinear distances induced by K
 
     """
-    k_ii = sparse.diagonal(K)
+    k_ii = np.diagonal(K)
     return np.add.outer(k_ii, k_ii) / 2.0 - K
 
 

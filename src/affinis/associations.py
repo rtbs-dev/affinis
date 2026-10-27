@@ -55,8 +55,9 @@ def _safe_div(num, den):
 
 
 def _gram(X1, X2):
-    grammian = X1.T @ X2
-    return grammian.toarray() if issparse(grammian) else grammian
+    grammian = X1.astype(int).T @ X2.astype(int)
+    return grammian
+    # return grammian.toarray() if issparse(grammian) else grammian
 
 
 def coocur_prob(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -68,7 +69,7 @@ def coocur_prob(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
 
-    cts = X.T@X
+    cts = _gram(X,X)
     tot = X.shape[0]
     return pseudocount(pseudocts)(cts, tot)
 
@@ -102,7 +103,7 @@ def _marginal_prob(X: FeatMat, pseudocts: PsdCts = 0.5):
 
 def _contingency_cts(X):
     # nX = _not(X)
-    G = X.T@X
+    G = _gram(X,X)
     marginal = sparse.diagonal(G)
     only1 = (marginal - G)
 
@@ -125,7 +126,7 @@ def _binary_contingency(X):
     n = X.shape[0]
     both = coocur_prob(X)
     neither = coocur_prob(1 - X)
-    one = (X.T @ (1 - X) + 1) / (
+    one =(_gram(X.astype(int),1 - X) + 1) / (
         n + 2
     )  # np.logical_and.outer(X, ~X).mean(axis=2).mean(axis=0)
     other = one.T

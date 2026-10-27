@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import ma
+import warnings
 import scipy.sparse as sp
 from sparse import COO
 from .utils import (
@@ -103,13 +104,17 @@ def threshold_connected(K: SimsMat, bin: bool = True) -> SimsMat:
         bfs = sp.csgraph.breadth_first_tree(threshold_value(K,thres),0,directed=False)
         return bfs.nnz ==n-1
 
-    min_idx, min_thres = _binary_search_greatest(
-        candidates,
-        connected,
-        0,
-        # len(candidates) - n + 1,  # need at least n-1 edges for connected
-        candidates.shape[0]-1,
-    )
+    if candidates.shape[0]<1:
+        warnings.warn("no candidate threshold values, default t=0.")
+        min_thres=0.
+    else: 
+        min_idx, min_thres = _binary_search_greatest(
+            candidates,
+            connected,
+            0,
+            # len(candidates) - n + 1,  # need at least n-1 edges for connected
+            candidates.shape[0]-1,
+        )
     return threshold_value(K, min_thres, bin=bin)
 
 
