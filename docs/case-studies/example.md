@@ -203,12 +203,33 @@ plt.savefig(imgpath/'collab-mcc.webp')
 
 Meanwhile, precision scores will drop off sharply for sparse, stable predictions like (default) Forest Pursuit, in order to let Recall sufficiently increase. 
 
-This illustrates why one might want to use the `interaction` probability mode (FPi), instead: 
+This illustrates why one might want to use the `interaction` probability mode (FPi), instead (even though it has a lower `E[MCC]` accross all thresholds): 
 
 
 ```python
 m_fpi = Contingent.from_scalar(y_true, sq2flat(aff.forest_pursuit(X, mode='interaction')).todense())
+ax=plt.subplot()
+ax.fill(
+    m_fpi.weights, m_fpi.mcc, 
+    alpha=0.8,label=f'FPi: E[MCC]={m_fpi.expected('mcc'):.3f}'
+)
 
+ax.fill(
+    m_hyp.weights, m_hyp.mcc, 
+    alpha=0.8,label=f'Hyp.: E[MCC]={m_hyp.expected('mcc'):.3f}'
+)
+
+ax.set(xlim=(0,1),ylim=(0,1),xlabel='threshold',ylabel='MCC Score')
+plt.legend()
+plt.savefig(imgpath/'collab-fpi.webp')
+```
+
+![mcc-fpi-thresholds](img/collab-fpi.webp)
+
+
+Compare the accross-threshold scores to the P-R plot, which scales the thresholding as a tradeoff between precision and recall (and thus rewards having _any_ threshold with both high precision and recall) 
+
+```python
 f = plt.figure(figsize=(5,5))
 ax=plt.gca()
 PR_contour(ax=ax)

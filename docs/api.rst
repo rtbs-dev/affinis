@@ -42,3 +42,10 @@ filter
 
 .. automodule:: affinis.filter
     :members:
+
+
+edgespace
+---------
+
+.. automodule:: affinis.edgespace
+    :members:

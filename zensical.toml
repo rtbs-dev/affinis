@@ -27,6 +27,7 @@ nav = [
         'api/proximity.md',
         'api/distance.md',
         'api/filters.md',
+        'api/edgespace.md',
         'api/types.md',
         
   ]},

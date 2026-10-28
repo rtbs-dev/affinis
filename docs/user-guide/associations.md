@@ -114,26 +114,6 @@ These methods require having the original data, since they re-weight individual 
 See our documentation on [Hyperbolic Projections][affinis.associations.hyperbolic_project] and [Resource Allocation][affinis.associations.resource_project]
 
 ```python
-from sparse import diagonalize
-from affinis.edgespace import sq2flat, flat2sq
-# fwd = X.T@diagonalize(np.ma.divide(1,X.sum(axis=1).todense()).filled(0))
-Di = diagonalize(np.ma.divide(1,X.sum(axis=1).todense()+1).filled(0))
-Dj = diagonalize(np.ma.divide(1,X.sum(axis=0).todense()+1).filled(0))
-
-P = X.T @ Di @ X @ Dj
-from affinis.priors import pseudocount
-# sq2flat(den)
-# den
-# pseudocount(0.5)(num,den)
-# sq2flat(num),sq2flat(den)
-sns.heatmap(np.maximum(P, P.T).todense())
-```
-
-```python
-
-```
-
-```python
 hyp = aff.hyperbolic_project(X)
 rsc = aff.resource_project(X)
 
@@ -237,7 +217,7 @@ methods = {
     'odds-ratio': aff.odds_ratio(X),
     'Yule\'s Y':aff.yule_y(X),
     'Hyperbolic Proj.': hyp,
-    # 'Resource Alloc.':rsc,
+    'Resource Alloc.':rsc,
 }
 f,axs = plt.subplots(nrows=3, ncols=3, figsize=(8,8))
 

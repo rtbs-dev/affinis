@@ -18,6 +18,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from pathlib import Path
+from sparse import COO
 
 import affinis.associations as aff
 from affinis.plots import hinton
@@ -30,7 +31,7 @@ n_rows=30
 B = nx.bipartite.random_graph(n_cols,n_rows, .25, seed=2)
 n = list(B.nodes)[n_cols:]
 
-X = nx.bipartite.biadjacency_matrix(B, n).toarray()
+X = COO.from_scipy_sparse(nx.bipartite.biadjacency_matrix(B, n))
 ```
 
 ## Basic Additive Smoothing
@@ -63,6 +64,9 @@ plt.savefig(imgpath/'add-smooth.webp')
 ```
 
 ![additive priors](img/add-smooth.webp)
+
+
+NB in the hinton plots we show the sparsity pattern, though by default the beta prior will give the resulting matrix a `fill_value` based on adding the appropriate pseudocounts. 
 
 
 ## Beta Priors 

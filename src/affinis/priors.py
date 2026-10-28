@@ -50,11 +50,12 @@ def beta_binom_post(  #type:ignore
     align_succs = np.zeros_like(trial.data)
     align_succs[t_idx] = succs.data
     sparse_post = beta_binom_post(align_succs, trial.data, a, b)
+    fill = a/(a+b) if a!=0. else 0.
     return COO(
         coords=trial.coords,
         data=sparse_post,
         shape=trial.shape,
-        fill_value = a/(a+b)
+        fill_value = fill
     )
 
 @dispatch

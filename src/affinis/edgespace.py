@@ -6,6 +6,7 @@ from plum import dispatch
 from scipy.spatial.distance import squareform
 from sparse import COO, einsum, triu
 from scipy.sparse import sparray
+from .types import FeatMat
 Idx: TypeAlias = Int[np.ndarray, "*elems"]
 
 
@@ -105,6 +106,17 @@ def csr_rows_idx(matrix):
         yield indices
 
 
-def binary_feature_edge_cliques(X):
+def binary_feature_edge_cliques(X:FeatMat):
+    """returns a generator over the rows of X, projecting node->edgespace
+
+    Using the standard edgespace projection from [[affinis.edgespace.sq2flat]],
+    we can interpret each observation of X as a clique (all pairwise interactions
+    of the nodes in X are also active).
+
+    This turns every row of X into a 2D adjacency matrix, and then unrolls each
+    slice's upper triangle to a (longer) 1D array. 
+
+    """
+
     X_edgespace = sq2flat(einsum("bi,bo->bio", X, X)).tocsr()
     yield from csr_rows_idx(X_edgespace)
