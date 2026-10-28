@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "project": "affinis",
+  "repo": "..",
+  "environment_type": "uv",
+  "benchmarks": [
+    "associations"
+  ],
+  "default_benchmark_timeout": 120
+}
