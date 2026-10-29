@@ -471,7 +471,7 @@ def _pursue_tree_basis(edge_candidates, edge_weights, edge_priors=False, beta=0.
         return edge_candidates[tree_edges]
 
 
-def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta=0.001):
+def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta=0.001, n_jobs=None):
     """resample with a kernel bootstrap on MSTs in a manifold"""
     N_obs = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if (prior_dists is None) and (not edge_priors):
@@ -488,18 +488,19 @@ def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta
 
     prior_weights = sq2flat(prior_dists)
 
-    if X.shape[0]>=1000:
-        E_activations = Parallel(n_jobs=-1, backend="loky")(
-            delayed(_pursue_tree_basis)(edges, prior_weights[edges])
-            for edges in binary_feature_edge_cliques(N_obs)
-        )
-    else:
+    if n_jobs is None:
         E_activations = [
             _pursue_tree_basis(
                 edges, prior_weights[edges],
                 edge_priors=edge_priors, beta=beta
             ) for edges in binary_feature_edge_cliques(N_obs)
         ]
+
+    else:
+        E_activations = Parallel(n_jobs=n_jobs, backend="loky")(
+            delayed(_pursue_tree_basis)(edges, prior_weights[edges])
+            for edges in binary_feature_edge_cliques(N_obs)
+        )
 
     # E_activations = [
     #     _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
@@ -529,7 +530,7 @@ def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta
     # return E_obs
 
 
-def forest_pursuit_cts(X: FeatMat, prior_dists: SimsMat | None = None) -> SimsMat:
+def forest_pursuit_cts(X: FeatMat, prior_dists: SimsMat | None = None, beta=0.001, n_jobs=None) -> SimsMat:
     """Point estimate for number of actual edge activations, rather than
     node-node co-occurrences.
     Uses the Empirical Bayes estimate of the Spanning Forest Density
@@ -543,7 +544,7 @@ def forest_pursuit_cts(X: FeatMat, prior_dists: SimsMat | None = None) -> SimsMa
     """
 
     # est_dists = -np.log(prior(X, pseudocts=pseudocts))
-    e_obs = _spanning_forests_obs_bootstrap(X, prior_dists=prior_dists)
+    e_obs = _spanning_forests_obs_bootstrap(X, prior_dists=prior_dists, beta=beta, n_jobs=n_jobs)
     return flat2sq(e_obs.sum(axis=0))
 
 
@@ -554,6 +555,7 @@ def expected_forest_maximization(
     eps: float = 1e-5,
     max_iter: int = 100,
     verbose: bool = False,
+    n_jobs=None,
 ) -> SimsMat|(SimsMat,int):
     """Expectation Maximization Scheme to recover structure.
 
@@ -586,7 +588,7 @@ def expected_forest_maximization(
     while (diff > eps) and (it < max_iter):
         it += 1
         e_cts = _spanning_forests_obs_bootstrap(
-            X, prior_dists=prior_struct, edge_priors=True, beta=beta
+            X, prior_dists=prior_struct, edge_priors=True, beta=beta, n_jobs=n_jobs
         ).sum(axis=0).todense()
         e_prob_new = e_prob + (e_cts - e_prob * uv_cts) / (
             uv_cts + 1
@@ -603,7 +605,7 @@ def expected_forest_maximization(
 
 def forest_pursuit_edge(
     X: FeatMat, prior_dists: SimsMat | None = None, pseudocts: PsdCts = "min-connect"
-) -> SimsMat:
+, n_jobs=None, beta=0.001) -> SimsMat:
     """point estimate for edge-activation probability, conditional on
     both nodes being a priori activated.
     Uses the Spanning Forest Density non-parametric estimator
@@ -616,7 +618,7 @@ def forest_pursuit_edge(
     Returns: probability of edge traversal given a co-occurrence.
     """
     Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
-    e_cts = sq2flat(forest_pursuit_cts(Xsp, prior_dists=prior_dists))
+    e_cts = sq2flat(forest_pursuit_cts(Xsp, prior_dists=prior_dists, n_jobs=n_jobs, beta=beta))
     uv_cts = sq2flat(Xsp.T@Xsp)
     # e_prob = (e_cts + pseudocts) / (uv_cts + 2 * pseudocts)
     e_prob = pseudocount(pseudocts)(e_cts, uv_cts)
@@ -628,6 +630,8 @@ def forest_pursuit_interaction(
     prior_dists: SimsMat | None = None,
     precalc_prob: SimsMat | None = None,
     pseudocts: PsdCts = "min-connect",
+    n_jobs=None,
+    beta=0.001,
 ) -> SimsMat:
     """point estimate for probability of observing an edge traversal,
     using the Spanning Forest Density non-parametric estimator. Weights conditional
@@ -649,7 +653,7 @@ def forest_pursuit_interaction(
     Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if not precalc_prob:
         e_prob = sq2flat(
-            forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts)
+            forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts, n_jobs=n_jobs, beta=beta)
         )
     else:
         e_prob = sq2flat(precalc_prob)
@@ -663,6 +667,8 @@ def forest_pursuit(
     mode: FPopts = "edge-prob",
     pseudocts: PsdCts = "min-connect",
     prior_dists: SimsMat | None = None,
+    n_jobs=None,
+    beta=0.001,
     **efm_kws,
 ) -> SimsMat:
     """Structure estimation under spreading-process assumption [(Sexton, 2025)](https://doi.org/10.13016/o252-lfmi)
@@ -707,13 +713,13 @@ def forest_pursuit(
 
     match mode:
         case "edge-prob":
-            return forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts)
+            return forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts,beta=beta, n_jobs=n_jobs)
         case "counts":
-            return forest_pursuit_cts(Xsp, prior_dists=prior_dists)
+            return forest_pursuit_cts(Xsp, prior_dists=prior_dists,beta=beta, n_jobs=n_jobs)
         case "forest-max":
-            return expected_forest_maximization(Xsp, **efm_kws)
+            return expected_forest_maximization(Xsp,beta=beta, n_jobs=n_jobs, **efm_kws)
         case "interaction":
-            return forest_pursuit_interaction(Xsp, prior_dists, pseudocts=pseudocts)
+            return forest_pursuit_interaction(Xsp, prior_dists, pseudocts=pseudocts,beta=beta, n_jobs=n_jobs)
 
 
 def _forest_pursuit_normdegs(X, prior_dists=None, pseudocts="min-connect"):
