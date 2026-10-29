@@ -41,12 +41,15 @@ __all__ = [
 # TODO: dispatch on dataframes, static-frames, etc.
 
 def _safe_div(num, den):
-    return np.divide(
-        num,
-        den,
-        out=np.zeros_like(num, dtype=float),
-        where=den != 0,
-    )
+    if issparse(num):
+        return num/den
+    else: 
+        return np.divide(
+            num,
+            den,
+            out=np.zeros_like(num, dtype=float),
+            where=den != 0,
+        )
 
 def _gram(X1, X2):
     grammian = X1.T @ X2
