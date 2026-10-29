@@ -46,12 +46,15 @@ __all__ = [
 
 
 def _safe_div(num, den):
-    return np.divide(
-        num,
-        den,
-        out=np.zeros_like(num, dtype=float),
-        where=den != 0,
-    )
+    if issparse(num):
+        return num/den
+    else: 
+        return np.divide(
+            num,
+            den,
+            out=np.zeros_like(num, dtype=float),
+            where=den != 0,
+        )
 
 
 def _gram(X1, X2):

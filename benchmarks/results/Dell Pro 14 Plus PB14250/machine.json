@@ -1,0 +1,9 @@
+{
+    "arch": "x86_64",
+    "cpu": "Intel(R) Core(TM) Ultra 5 235U",
+    "machine": "Dell Pro 14 Plus PB14250",
+    "num_cpu": "14",
+    "os": "Ubuntu 24.04.5 LTS",
+    "ram": "33072693248",
+    "version": 1
+}
