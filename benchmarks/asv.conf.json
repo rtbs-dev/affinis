@@ -2,9 +2,25 @@
   "version": 1,
   "project": "affinis",
   "repo": "..",
-  "environment_type": "uv",
   "benchmarks": [
     "associations"
   ],
-  "default_benchmark_timeout": 120
+  "default_benchmark_timeout": 120,
+  "environment_type": "virtualenv",
+  "matrix": {
+    "req": {
+      "uv": [
+        ""
+      ]
+    }
+  },
+  "build_command": [
+    "python -m uv build --wheel --out-dir {build_cache_dir}/wheels {build_dir}"
+  ],
+  "install_command": [
+    "python -m uv pip install --reinstall --find-links={build_cache_dir}/wheels affinis networkx"
+  ],
+  "uninstall_command": [
+    "return-code=any python -m uv pip uninstall affinis"
+  ]
 }
