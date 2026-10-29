@@ -2,6 +2,11 @@
   "version": 1,
   "project": "affinis",
   "repo": "..",
+  "branches": [
+    "main",
+    "sparsify",
+    "benchmark"
+  ],
   "benchmarks": [
     "associations"
   ],

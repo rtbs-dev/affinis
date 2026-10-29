@@ -1,6 +1,6 @@
 {
     "associations.AssociationsBench.time_coocur_prob": {
-        "code": "class AssociationsBench:\n    def time_coocur_prob(self, *args):\n        return aff.coocur_prob(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_coocur_prob(self, *args):\n        return aff.coocur_prob(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_coocur_prob",
         "number": 0,
@@ -12,11 +12,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "e141850e77809c85690dac1e2d4d8b98b26e9747cc429de8b14a2f3837afa97c",
+        "version": "b07596995b2c243965d62e893e31b76e0e6ec92f011438511d587ea73c7e8431",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_doubly_stochastic_filter": {
-        "code": "class AssociationsBench:\n    def time_doubly_stochastic_filter(self, *args):\n        return aff.doubly_stochastic_filter(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_doubly_stochastic_filter(self, *args):\n        return aff.doubly_stochastic_filter(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_doubly_stochastic_filter",
         "number": 0,
@@ -28,11 +28,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "f9a69de551dba1c4e5ac0d63f925dab18ad42215f4e7dbe7142ab0277090cd7f",
+        "version": "1f87467a1fa7b364f1a2417e07662513d5f6056badfcf29a5054540a47711148",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_forest_pursuit": {
-        "code": "class AssociationsBench:\n    def time_forest_pursuit(self, *args):\n        return aff.forest_pursuit(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_forest_pursuit(self, *args):\n        return aff.forest_pursuit(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_forest_pursuit",
         "number": 0,
@@ -44,11 +44,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "dfdd70dafe82a015adada115c6810e5fd1779400b3dd49412999bfdf0fb2482f",
+        "version": "c4d6c164a02a3522c5d69d0e576b625e37a006f8289392f4a21caa1187884c89",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_high_salience_skeleton": {
-        "code": "class AssociationsBench:\n    def time_high_salience_skeleton(self, *args):\n        return aff.high_salience_skeleton(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_high_salience_skeleton(self, *args):\n        return aff.high_salience_skeleton(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_high_salience_skeleton",
         "number": 0,
@@ -60,11 +60,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "d74dd4cfa1c28493b3e46bfc4300852d95b131361e6a17b42ba3df91dcdce6b8",
+        "version": "44a06a28cb2fa1fd5dd5aa43a6619d4eb0d6e3b1ed8e8ae3ef288819eab5aa92",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_hyperbolic_project": {
-        "code": "class AssociationsBench:\n    def time_hyperbolic_project(self, *args):\n        return aff.hyperbolic_project(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_hyperbolic_project(self, *args):\n        return aff.hyperbolic_project(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_hyperbolic_project",
         "number": 0,
@@ -76,11 +76,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "3ade52c338606e0ad3f0aa9e332f00edabe4c217ff71a3a7bb6033b5cfc02996",
+        "version": "09470c74c3993e6df73620941a54f125a0886558e1099b3b5872e2f84b2f465c",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_mutual_information": {
-        "code": "class AssociationsBench:\n    def time_mutual_information(self, *args):\n        return aff.mutual_information(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_mutual_information(self, *args):\n        return aff.mutual_information(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_mutual_information",
         "number": 0,
@@ -92,11 +92,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "0f88b5a97357916b41ab30abb7c0b2cd3715975452279e5e718f6cee9416a55a",
+        "version": "c1c52e6f0c74c5474a61d05751b92bf589aa66de3ae7617ab8f0a6c9c8a06c89",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_ochiai": {
-        "code": "class AssociationsBench:\n    def time_ochiai(self, *args):\n        return aff.ochiai(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_ochiai(self, *args):\n        return aff.ochiai(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_ochiai",
         "number": 0,
@@ -108,11 +108,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "51d0dcbb1f7e3897798a92e8b9ff91417fb3de8bc20c47466dc72d1a403d3391",
+        "version": "1a6cf700444cbea258e05f30c5af2a7dd165c7a42f703fbf07262120efe5f5e1",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_odds_ratio": {
-        "code": "class AssociationsBench:\n    def time_odds_ratio(self, *args):\n        return aff.odds_ratio(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_odds_ratio(self, *args):\n        return aff.odds_ratio(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_odds_ratio",
         "number": 0,
@@ -124,11 +124,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "16f8f24279dcdc2fc0b44cc5df02a5986c5d245b207b867fd133fd766db926b7",
+        "version": "f1b09e4f52ef647d5b4a50d4a1f4f1fe4cbfb0f042daa1b6f39daa7e94301cbe",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_resource_project": {
-        "code": "class AssociationsBench:\n    def time_resource_project(self, *args):\n        return aff.resource_project(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_resource_project(self, *args):\n        return aff.resource_project(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_resource_project",
         "number": 0,
@@ -140,11 +140,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "ff1681f342f9151ace4570158b35861070396b453fd85d4615abaf5cadfda4a4",
+        "version": "7331d1c4a8845690da2d4f77504ce2c7a9b295f4ec1cc5e0c1ae5cfc5f505238",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_yule_q": {
-        "code": "class AssociationsBench:\n    def time_yule_q(self, *args):\n        return aff.yule_q(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_yule_q(self, *args):\n        return aff.yule_q(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_yule_q",
         "number": 0,
@@ -156,11 +156,11 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "22ea423796dbca67e1f36fef7e51794ff311c4ee58b8f746ae72445bd325b350",
+        "version": "2ace4b45f4f34f4ef2cffd8bc6b69bc74f7e47a1adb287d2f9b61777b545399b",
         "warmup_time": -1
     },
     "associations.AssociationsBench.time_yule_y": {
-        "code": "class AssociationsBench:\n    def time_yule_y(self, *args):\n        return aff.yule_y(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename).to_scipy_sparse()\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
+        "code": "class AssociationsBench:\n    def time_yule_y(self, *args):\n        return aff.yule_y(self.X)\n\n    def setup(self):\n        # Use absolute path to avoid asv temp dir issues\n        # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')\n        self.X = sparse.load_npz(self.filename)\n\n    def setup_cache(self):\n        import networkx as nx\n        n_cols=1000\n        n_rows=15000\n        B = nx.bipartite.random_graph(n_cols,n_rows, .0005, seed=2)\n        n = list(B.nodes)[n_cols:]\n        X = sparse.COO.from_scipy_sparse(\n            nx.bipartite.biadjacency_matrix(B, n)\n        ).astype(bool)\n        sparse.save_npz(self.filename, X)",
         "min_run_count": 2,
         "name": "associations.AssociationsBench.time_yule_y",
         "number": 0,
@@ -172,7 +172,7 @@
         "setup_cache_key": "associations:8",
         "type": "time",
         "unit": "seconds",
-        "version": "dd802484a57157a9b77a9bbf65f5fe2df09917fb5b8e8854bbcafecaca712ce2",
+        "version": "1c7e9ea4ed00ff37544a00dfbef99081c7baa03a82c527e008fd6bdd01d7c1b0",
         "warmup_time": -1
     },
     "version": 2
