@@ -20,7 +20,7 @@ class AssociationsBench:
     def setup(self):
         # Use absolute path to avoid asv temp dir issues
         # path = os.path.join(os.path.dirname(__file__), 'large_matrix.npz')
-        self.X = sparse.load_npz(self.filename).to_scipy_sparse()
+        self.X = sparse.load_npz(self.filename)
 
     def time_coocur_prob(self, *args):
         return aff.coocur_prob(self.X)

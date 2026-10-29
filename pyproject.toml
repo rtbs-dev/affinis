@@ -26,6 +26,7 @@ dependencies = [
     "plum-dispatch~=2.6",
     "contingency-tools~=0.2",
     "makefun>=1.16.0",
+    "joblib>=1.6.0",
 ]
 
 [project.urls]
@@ -42,6 +43,7 @@ dev = [
   "toolz~=0.12.0",
   "hypothesis~=6.151.5",
   "seaborn>=0.13",
+  "asv>=0.6.6",
 ]
 
 docs = [
