@@ -9,7 +9,7 @@ from networkx import Graph, adjacency_matrix
 Arr: TypeAlias = sparse.SparseArray | sparray | np.ndarray
 """Possible acceptable array backends"""
 
-FeatMat: TypeAlias = Bool[Arr, "obs feat"]
+FeatMat: TypeAlias = Bool[sparse.COO, "obs feat"]
 """Boolean feature matrix (rows=observations, cols=features)"""
 
 SimsMat: TypeAlias = Num[Arr, "feat feat"]
