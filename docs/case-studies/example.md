@@ -87,6 +87,11 @@ For our data, represent each paper as a row, and the authors on a given paper ea
 <!-- #endregion -->
 
 ```python
+from affinis.edgespace import sq2flat, flat2sq
+from scipy.sparse.csgraph import breadth_first_tree
+from scipy.sparse import issparse
+from sparse import COO
+
 def sim_papers(n_weeks, L, jumps_param=0.1, rng=np.random.default_rng(2)): 
     Arw = ((L/np.diag(L)).pipe(lambda df: np.diag(np.diag(df))-df)*0.5)
     def sim_week(): 
@@ -104,8 +109,12 @@ def sim_papers(n_weeks, L, jumps_param=0.1, rng=np.random.default_rng(2)):
 
 L_df = pd.DataFrame(L, columns=author_idx, index=author_idx)
 
-X = np.vstack([paper for paper in sim_papers(52,L_df, 0.05)])
-Xdf = pd.DataFrame(X, columns=author_idx)
+
+X = COO.from_numpy(np.vstack([paper for paper in sim_papers(52,L_df, 0.07)]))
+Xdf = pd.DataFrame(X.todense(), columns=author_idx)
+hinton(X)
+plt.xlabel('author')
+plt.ylabel('publication');
 ```
 
 ## Author relationship recovery
@@ -116,23 +125,23 @@ To perform a thresholding of edge weights relative to the method we pick, we can
 ```python
 psct ='min-connect'
 # psct=0
-
 baselines = {
-    # 'Chow Liu Tree': aff.chow_liu(X, pseudocts=psct),
+    'Chow Liu Tree': aff.chow_liu(X, pseudocts=psct),
     'Forest Pursuit': aff.forest_pursuit(X,pseudocts=psct),  
     'HSS': aff.high_salience_skeleton(X, pseudocts=psct),
     'Co-occurrence Prob.': aff.coocur_prob(X, pseudocts=psct),
     'Hyperbolic Proj.': aff.hyperbolic_project(X),
-    'odds-ratio': aff.odds_ratio(X, pseudocts=psct),
+    # 'odds-ratio': aff.odds_ratio(X, pseudocts=psct),
     'doubly-stochastic':aff.doubly_stochastic_filter(X, reg=0.1,pseudocts=psct),
-    
 }
+
 f,axs = plt.subplots(nrows=2, ncols=3, figsize=(8,5))
 
 for n, (lab, Aest) in enumerate(baselines.items()): 
     ax = axs.flatten()[n]
     # ax.imshow(Aest)
     hinton(threshold_connected(Aest), ax=ax)
+    # hinton(Aest, ax=ax)
     hinton(-A, marker='.', ax=ax)
     ax.set_xlabel(lab)
     ax.set_xticklabels([])
@@ -156,12 +165,14 @@ from contingency import Contingent
 from contingency.plots import PR_contour
 from scipy.spatial.distance import squareform
 
-y_true = squareform(A).astype(bool)
-y_fp = squareform(baselines['Forest Pursuit'])
-y_ds = squareform(baselines['doubly-stochastic'],checks=False)
+y_true = sq2flat(A).astype(bool)
+y_fp = sq2flat(baselines['Forest Pursuit'])
+y_ds = sq2flat(baselines['doubly-stochastic'])
+y_hyp = sq2flat(baselines["Hyperbolic Proj."])
 
-m_fp = Contingent.from_scalar(y_true, y_fp)
-m_ds = Contingent.from_scalar(y_true, y_ds)
+m_fp = Contingent.from_scalar(y_true, y_fp.todense())
+m_ds = Contingent.from_scalar(y_true, y_ds.todense())
+m_hyp = Contingent.from_scalar(y_true, y_hyp.todense())
 ```
 
 Let's look at how the _Matthew's Correlation Coefficient_ (MCC) changes for Forest Pursuit v.s. Hyperbolic Projection: 
@@ -172,6 +183,12 @@ ax.fill(
     m_fp.weights, m_fp.mcc, 
     alpha=0.8,label=f'FP: E[MCC]={m_fp.expected('mcc'):.3f}'
 )
+
+ax.fill(
+    m_hyp.weights, m_hyp.mcc, 
+    alpha=0.8,label=f'Hyp.: E[MCC]={m_hyp.expected('mcc'):.3f}'
+)
+
 ax.fill(
     m_ds.weights, m_ds.mcc, 
     alpha=0.8,label=f'DS: E[MCC]={m_ds.expected('mcc'):.3f}'
@@ -186,12 +203,33 @@ plt.savefig(imgpath/'collab-mcc.webp')
 
 Meanwhile, precision scores will drop off sharply for sparse, stable predictions like (default) Forest Pursuit, in order to let Recall sufficiently increase. 
 
-This illustrates why one might want to use the `interaction` probability mode (FPi), instead: 
+This illustrates why one might want to use the `interaction` probability mode (FPi), instead (even though it has a lower `E[MCC]` accross all thresholds): 
 
 
 ```python
-m_fpi = Contingent.from_scalar(y_true, squareform(aff.forest_pursuit(X, mode='interaction')))
+m_fpi = Contingent.from_scalar(y_true, sq2flat(aff.forest_pursuit(X, mode='interaction')).todense())
+ax=plt.subplot()
+ax.fill(
+    m_fpi.weights, m_fpi.mcc, 
+    alpha=0.8,label=f'FPi: E[MCC]={m_fpi.expected('mcc'):.3f}'
+)
 
+ax.fill(
+    m_hyp.weights, m_hyp.mcc, 
+    alpha=0.8,label=f'Hyp.: E[MCC]={m_hyp.expected('mcc'):.3f}'
+)
+
+ax.set(xlim=(0,1),ylim=(0,1),xlabel='threshold',ylabel='MCC Score')
+plt.legend()
+plt.savefig(imgpath/'collab-fpi.webp')
+```
+
+![mcc-fpi-thresholds](img/collab-fpi.webp)
+
+
+Compare the accross-threshold scores to the P-R plot, which scales the thresholding as a tradeoff between precision and recall (and thus rewards having _any_ threshold with both high precision and recall) 
+
+```python
 f = plt.figure(figsize=(5,5))
 ax=plt.gca()
 PR_contour(ax=ax)
@@ -201,7 +239,7 @@ plt.step(
 )
 plt.step(
     m_hyp.recall, m_hyp.precision, 
-    where='post', label=f'DS: APS={m_hyp.expected('aps'):.3f}'
+    where='post', label=f'Hyp.: APS={m_hyp.expected('aps'):.3f}'
 )
 plt.step(
     m_fpi.recall, m_fpi.precision, 

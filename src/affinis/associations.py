@@ -1,25 +1,29 @@
-
 from __future__ import annotations
+
 import numpy as np
-from scipy.sparse.csgraph import minimum_spanning_tree, shortest_path, reconstruct_path
-from scipy.sparse import coo_array, issparse
 import sparse
+from joblib import Parallel, delayed
+from scipy.sparse import coo_array, issparse
+from scipy.sparse.csgraph import minimum_spanning_tree, reconstruct_path, shortest_path
+
+from .distance import adjusted_forest_dists
+from .edgespace import (
+    binary_feature_edge_cliques,
+    flat2sq,
+    sq2flat,
+)
+from .filter import threshold_connected
+from .priors import PsdCts, pseudocount
+from .proximity import sinkhorn
+from .types import FeatMat, FPopts, SimsMat
 from .utils import (
-    _sq,
+    _norm_diag,
     _outer,
     _sparse_directed_to_symmetric,
+    _sq,
     # groupby_col0,
-    csr_rows_idx,
-    complete_edgelist_on_nodes,
-    sq_ij_e,
     edge_weights_to_laplacian,
-    _norm_diag,
 )
-from .types import FeatMat, SimsMat, FPopts
-from .priors import pseudocount, PsdCts
-from .distance import adjusted_forest_dists
-from .proximity import sinkhorn
-from .filter import min_connected_filter
 
 __all__ = [
     "coocur_prob",
@@ -34,35 +38,41 @@ __all__ = [
     "resource_project",
     "high_salience_skeleton",
     "doubly_stochastic_filter",
-    "forest_pursuit",       
+    "forest_pursuit",
 ]
 
 # TODO: define type signatures by array shapes
 # TODO: dispatch on dataframes, static-frames, etc.
 
+
 def _safe_div(num, den):
-    return np.divide(
-        num,
-        den,
-        out=np.zeros_like(num, dtype=float),
-        where=den != 0,
-    )
+    if issparse(num):
+        return num/den
+    else: 
+        return np.divide(
+            num,
+            den,
+            out=np.zeros_like(num, dtype=float),
+            where=den != 0,
+        )
+
 
 def _gram(X1, X2):
-    grammian = X1.T @ X2
-    return grammian.toarray() if issparse(grammian) else grammian
+    grammian = X1.astype(int).T @ X2.astype(int)
+    return grammian
+    # return grammian.toarray() if issparse(grammian) else grammian
 
 
 def coocur_prob(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     """probability of a co-ocurrence per-observation
 
     Args:
-      X: feature matrix     
+      X: feature matrix
       pseudocts: additive smoothing parameter
 
     """
 
-    cts = _gram(X, X)
+    cts = _gram(X,X)
     tot = X.shape[0]
     return pseudocount(pseudocts)(cts, tot)
 
@@ -74,11 +84,12 @@ def coocur_prob(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
 
 def _not(X):
-    if issparse(X):
-        nX = X < coo_array(np.ones(X.shape))
-    else:
-        nX = 1 - X
-    return nX
+    # if issparse(X):
+    #     nX = X < coo_array(np.ones(X.shape))
+    # else:
+    #     nX = 1 - X
+    # return nX
+    return 1-X
 
 
 def _marginal_cts(X):
@@ -86,31 +97,39 @@ def _marginal_cts(X):
 
 
 def _marginal_prob(X: FeatMat, pseudocts: PsdCts = 0.5):
-    # psdct = pseudocount(pseudocts)  #TODO cannot use _sq(num) when num is 1D!!
+    psdct = pseudocount(pseudocts)  #TODO cannot use _sq(num) when num is 1D!!
     # return [psdct(ct, X.shape[0]) for ct in _marginal_cts(X)]
-    return [(ct + pseudocts) / (X.shape[0] + 2 * pseudocts) for ct in _marginal_cts(X)]
+    # return [(ct + pseudocts) / (X.shape[0] + 2 * pseudocts) for ct in _marginal_cts(X)]
+    # ps
+    return [psdct(ct, X.shape[0]) for ct in _marginal_cts(X)]
 
 
 def _contingency_cts(X):
-    nX = _not(X)
-    both = _sq(_gram(X, X))
-    one = _sq(_gram(X, nX))
-    other = _sq(_gram(nX, X))
-    neither = _sq(_gram(nX, nX))
+    # nX = _not(X)
+    G = _gram(X,X)
+    marginal = sparse.diagonal(G)
+    only1 = (marginal - G)
+
+    both = sq2flat(G)
+    one = sq2flat(only1)
+    other = sq2flat(only1.T)
+    neither = X.shape[0]-sq2flat(np.add.outer(marginal, marginal))+both
     return neither, one, other, both
 
 
 def _contingency_prob(X: FeatMat, pseudocts: PsdCts = 0.5):
     psdct = pseudocount(pseudocts)
-    cts = np.vstack(_contingency_cts(X))
-    return [psdct(ct, X.shape[0]) for ct in cts]
+    # cts = np.vstack(_contingency_cts(X))
+    cts = _contingency_cts(X)
+
+    return sparse.stack([psdct(ct, X.shape[0]) for ct in cts])
 
 
 def _binary_contingency(X):
     n = X.shape[0]
     both = coocur_prob(X)
     neither = coocur_prob(1 - X)
-    one = (X.T @ (1 - X) + 1) / (
+    one =(_gram(X.astype(int),1 - X) + 1) / (
         n + 2
     )  # np.logical_and.outer(X, ~X).mean(axis=2).mean(axis=0)
     other = one.T
@@ -119,23 +138,23 @@ def _binary_contingency(X):
 
 def odds_ratio(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     r"""Ratio of the odds of a true pos/neg to false pos/neg
-    
+
     For associations, we replace pos/neg and true/false with
     a=1/0 b=1/0, which gives odds ratio as:
-    
+
     $$
     \text{OR}=\frac{p_{11}p_{00}}{p_{01}p_{10}}
     $$
 
     Additive smoothing is applied via the initial calculation of
     conditional probabilities.
-    
+
     Args:
       X: feature matrix
       pseudocts: additive smoothing parameter
     """
     a, b, c, d = _contingency_prob(X, pseudocts=pseudocts)
-    return _sq(a * d / (b * c)) + np.eye(X.shape[1])
+    return flat2sq(a * d / (b * c)) + np.eye(X.shape[1])
 
 
 def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -147,15 +166,15 @@ def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     An estimate for the mutual information (i.e., between the sample
     distributions) can be derived from the marginals, as with
     OR/Yule's Q/Y/etc., though it is more compactly represented as a
-    pairwise sum over the domains of each distribution being compared:     
+    pairwise sum over the domains of each distribution being compared:
 
     $$
-    \text{MI}(x_i,x_j)\approx \sum_{i,j\in[0,1]} p_{ij} \log \left( \frac{p_{ij}}{p_{i\bullet}p_{\bullet j}} \right) 
+    \text{MI}(x_i,x_j)\approx \sum_{i,j\in[0,1]} p_{ij} \log \left( \frac{p_{ij}}{p_{i\bullet}p_{\bullet j}} \right)
     $$
 
     Additive smoothing is applied via the initial calculation of
     conditional probabilities.
-    
+
     Args:
         X: feature matrix
         pseudocts:  additive smoothing parameter
@@ -163,23 +182,23 @@ def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Returns:
 
     """
-    Pxy = np.array(_contingency_prob(X, pseudocts=pseudocts))
+    Pxy = _contingency_prob(X, pseudocts=pseudocts)
 
     # Pxy = np.vstack([sq(i) for i in cond_table])
     yes, no = _marginal_prob(X)
     # TODO had to hard-code 0.5 for now :(, pseudocts=pseudocts)
 
     # print(Pxy.sum(axis=1))
-    PxPy = np.vstack(
+    PxPy = sparse.COO(sparse.stack(
         [
-            _sq(np.multiply.outer(a, b))
+            sq2flat(np.multiply.outer(a, b))
             for a, b in [(no, no), (yes, no), (no, yes), (yes, yes)]
         ]
-    )
-    entropy = -np.vstack([x * np.log(x) for x in (yes, no)]).sum(axis=0)
+    ), fill_value=yes.fill_value**2)
+    entropy = -sparse.stack([x * np.log(x) for x in (yes, no)]).sum(axis=0)
 
     MI_pairs = (Pxy * np.log(Pxy) - Pxy * np.log(PxPy)).sum(axis=0)
-    return _sq(MI_pairs) + np.diag(entropy)
+    return flat2sq(MI_pairs) + sparse.diagonalize(entropy)
     # return sq(entropy(Pxy, PxPy))
 
 
@@ -197,13 +216,12 @@ def chow_liu(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
     # return sq(sq(minimum_spanning_tree(-MI_binary(X)).todense()))
-    return _sq(
-        _sq(
-            minimum_spanning_tree(
-                np.exp(-(mutual_information(X, pseudocts=pseudocts)))
-            ).todense()
+    return _sparse_directed_to_symmetric(
+        minimum_spanning_tree(
+            sparse.COO(np.exp(-mutual_information(X, pseudocts=pseudocts)), fill_value=0)
         )
     )
+    
 
 
 def yule_y(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -225,7 +243,7 @@ def yule_y(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
 
     """
     a, b, c, d = _contingency_prob(X, pseudocts=pseudocts)
-    return _sq(((ad := np.sqrt(a * d)) - (bc := np.sqrt(b * c))) / (ad + bc))
+    return flat2sq(((ad := np.sqrt(a * d)) - (bc := np.sqrt(b * c))) / (ad + bc))
     # return ((sor:=np.sqrt(OR))-1)/(sor+1)
     # return ((ad:=np.sqrt(both*neither))-(bc:=np.sqrt(one*other)))/(ad+bc)
 
@@ -234,20 +252,20 @@ def yule_q(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     r"""a.k.a. Goodman & Kruskal's gamma for 2x2.
 
     mobius transform of the Odds Ratio to the range [-1,1]:
-    
+
     $$
     Q = \frac{\text{OR}-1}{\text{OR}+1}
     $$
 
     Args:
       X: feature matrix
-      pseudocts:  additive smoothing parameter 
+      pseudocts:  additive smoothing parameter
 
     Returns: square matrix containing Yule's Q
 
     """
     a, b, c, d = _contingency_prob(X, pseudocts=pseudocts)
-    return _sq(((ad := a * d) - (bc := b * c)) / (ad + bc))
+    return flat2sq(((ad := a * d) - (bc := b * c)) / (ad + bc))
 
 
 def ochiai(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -256,30 +274,33 @@ def ochiai(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Effectively an uncentered correlation, but for binary observations the "cosine similarity" is also called the _Ochiai Coefficient_ between two sets $A,B$, where binary "1" stands for an element belonging to the set.
     See [Janson and Vegelius (1981)](https://doi.org/10.1007/bf00347601).
 
-    In our use case, we define measured as 
+    In our use case, we define measured as
 
     $$
     \frac{|A \cap B |}{\sqrt{|A||B|}}=\sqrt{p_{1\bullet}p_{\bullet 1}} \rightarrow  \frac{X^TX}{\sqrt{\mathbf{s}_i\mathbf{s}_i^T}}\quad \mathbf{s}_i = \sum_i \mathbf{x}_i
-    $$  
+    $$
 
     This interpretation of cosine similarity as the geometric mean of
     conditional probabilities is particularly useful when trying to
     approximate interaction rates, and especially to apply additive
-    smoothing. 
+    smoothing.
 
     Args:
       X: feature matrix
-      pseudocts:  additive smoothing parameter 
+      pseudocts:  additive smoothing parameter
 
     Returns: square cosine similarity matrix (incl. ones in the diagonal)
 
     """
+    G = X.T @ X
+    return _norm_diag(G, psdcts=pseudocts)
     # I = np.eye(X.shape[-1])
-    co_occurs = _sq(_gram(X, X))  # + pseudocts
-    exposures = X.sum(axis=0)
-    pseudo_exposure = _sq(np.sqrt(_outer(np.multiply, exposures)))  # + 2 * pseudocts
-    # return _sq(co_occurs) / pseudo_exposure + np.eye(X.shape[1])
-    return _sq(pseudocount(pseudocts)(co_occurs, pseudo_exposure)) + np.eye(X.shape[1])
+    # co_occurs = sq2flat(X.T@X)  # + pseudocts
+    # exposu
+    # # exposures = X.sum(axis=0)
+    # pseudo_exposure = _sq(np.sqrt(_outer(np.multiply, exposures)))  # + 2 * pseudocts
+    # # return _sq(co_occurs) / pseudo_exposure + np.eye(X.shape[1])
+    # return _sq(pseudocount(pseudocts)(co_occurs, pseudo_exposure)) + np.eye(X.shape[1])
 
 
 def binary_cosine_similarity(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
@@ -295,10 +316,7 @@ def binary_cosine_similarity(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     return ochiai(X, pseudocts=pseudocts)
 
 
-
-def hyperbolic_project(
-    X:FeatMat, pseudocts:PsdCts=0.5
-)->SimsMat:
+def hyperbolic_project(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     """
     [Newman (2001)](https://doi.org/10.1103/physreve.64.016132)
     TODO: add to tests and document
@@ -311,9 +329,10 @@ def hyperbolic_project(
       X: feature matrix
 
     """
-    
-    reweight = _safe_div(X.T, (X.sum(axis=1)-1)).T  # right-stochastic bipartite
-    return _gram(reweight,X) 
+
+    # reweight = _safe_div(X.T, (X.sum(axis=1) - 1)).T  # right-stochastic bipartite
+    reweight = X.T@sparse.diagonalize(np.ma.divide(1,(X.sum(axis=1)-1).todense()).filled(0))
+    return reweight@X
 
 
 def resource_project(
@@ -325,12 +344,12 @@ def resource_project(
     node as having some “amount” of a resource to spend, which gets
     re-allocated by observational unit.
     Can be interpreted as one step of iterative proportional fitting on the
-    bipartite adjacency matrix. 
+    bipartite adjacency matrix.
 
-    NOTE: For additive smoothing to work, we assume no smoothing is needed
-    for the "forward" projection (features->observations), since we assume
-    all observations have some feature participation,
-    while some features may have no (observed) observations.
+    Note: passing a pseudocount currently does not have an effect,
+    as there is not a trivial way to interpret this bipartite projection
+    as a probability.
+    
 
     By default, we symmetrize with "maximum", meaning that association is
     considered as the strongest of the directions it could take. This
@@ -344,20 +363,24 @@ def resource_project(
     Returns: symmetrized "resource projection" similarities
 
     """
-    psdct_func = pseudocount(pseudocts)
-
-    fwd = _safe_div(X.T, X.sum(axis=1)).T  # right-stochastic bipartite
+    # psdct_func = pseudocount(pseudocts)
+    
+    Di = sparse.diagonalize(np.ma.divide(1,X.sum(axis=1).todense()).filled(0))
+    # fwd = _safe_div(X.T, X.sum(axis=1)).T  # right-stochastic bipartite
     # bwd = psdct_func(X, X.sum(axis=0))
 
     # P = _gram(((X.T) / (X.sum(axis=1))).T, ((X) / (X.sum(axis=0))))
-    num = _gram(X, fwd)  # project back
+    # num = fwd@X  # project back
     # den = np.multiply.outer(X.sum(axis=0), np.ones(X.shape[1]))
-    den = X.sum(axis=0)  # normalized by node occurrences (bipartite degree)
-    P = psdct_func(num, den)
+    Dj= sparse.diagonalize(np.ma.divide(1,X.sum(axis=0).todense()).filled(0))
+    # P = num@den
+    P = X.T@Di@X@Dj
     return sym_func(P, P.T)
 
 
-def high_salience_skeleton(X: FeatMat, prior_dists:SimsMat|None=None, pseudocts: PsdCts = "min-connect"):
+def high_salience_skeleton(
+    X: FeatMat, prior_dists: SimsMat | None = None, pseudocts: PsdCts = "min-connect"
+):
     """Backboning technique from [Grady et al. (2012)](https://doi.org/10.1038/ncomms1847).
     Calculates shortest paths from every node, and counts the
     number of trees each edge ended up being used in.
@@ -365,36 +388,34 @@ def high_salience_skeleton(X: FeatMat, prior_dists:SimsMat|None=None, pseudocts:
     Args:
       X: feature matrix
       prior_dists:  (Default = `-log(ochiai)`) prior distances for shortest paths
-      pseudocts: additive smoothing parameter 
+      pseudocts: additive smoothing parameter
 
     """
     if prior_dists is None:
         prior_dists = np.abs(-np.log(ochiai(X, pseudocts=pseudocts)))
     d, pred = shortest_path(prior_dists, return_predecessors=True)
-    E_obs = np.array(
+    E_obs = sq2flat(sparse.stack(
         [
-            _sq(
-                _sparse_directed_to_symmetric(
-                    reconstruct_path(d, p, directed=False).astype(bool)
-                ).toarray()
+            _sparse_directed_to_symmetric(
+                sparse.COO.from_scipy_sparse(reconstruct_path(d, p, directed=False).astype(bool))
             )
             for p in pred
         ]
-    )
+    ))
     hss = pseudocount(pseudocts)(E_obs.sum(axis=0), E_obs.shape[0])
     # hss = (E_obs.sum(axis=0) + pseudocts) / (E_obs.shape[0] + 2 * pseudocts)
-    return _sq(hss)
+    return flat2sq(hss)
 
 
 def doubly_stochastic_filter(
-    X:FeatMat,
-    reg:float=0.1,
-    pseudocts:PsdCts=0.5,
-    prior_dists:SimsMat|None=None,
-    **sink_kws
-)->SimsMat:
+    X: FeatMat,
+    reg: float = 0.1,
+    pseudocts: PsdCts = 0.5,
+    prior_dists: SimsMat | None = None,
+    **sink_kws,
+) -> SimsMat:
     """From [P.B. Slater(2009)](https://doi.org/10.1073/pnas.0904725106),
-    
+
     _“A two-stage algorithm for extracting the multiscale backbone of complex weighted networks”_
 
     This implementation is effectively a wrappper around
@@ -410,54 +431,93 @@ def doubly_stochastic_filter(
     """
 
     if prior_dists is None:
-        prior_dists= -np.log(ochiai(X, pseudocts=pseudocts))
+        prior_dists = -np.log(ochiai(X, pseudocts=pseudocts))
 
-    kern = _sq(np.exp(-_sq(prior_dists)/reg))
+    kern = flat2sq(np.exp(-sq2flat(prior_dists) / reg))
     ds = sinkhorn(kern, **sink_kws)
 
-    return _sq(min_connected_filter(_sq(ds)))
+    # return _sq(min_connected_filter(_sq(ds)))
+    return threshold_connected(ds, bin=False)
 
 
-def _pursue_tree_basis(dists, nodes, edge_priors=False, beta=0.001):
-    N = dists.shape[0]
-    all_E = complete_edgelist_on_nodes(N, nodes)
-    subset_dists = dists[nodes].T[nodes].T
-    if edge_priors:
-        # if we are recieving an estimate for the Graph Laplacian
-        # ...approximate steiner with local shortest path dists. 
-        subset_dists = adjusted_forest_dists(subset_dists, beta=beta)
-    tree = sparse.COO.from_scipy_sparse(minimum_spanning_tree(subset_dists))
-    tree_E = sq_ij_e(tree.shape[0], tree.coords)
-    return all_E[tree_E]
+# def _pursue_tree_basis(dists, nodes, edge_priors=False, beta=0.001):
+#     N = dists.shape[0]
+#     all_E = complete_edgelist_on_nodes(N, nodes)
+#     subset_dists = dists[nodes].T[nodes].T
+#     if edge_priors:
+#         # if we are recieving an estimate for the Graph Laplacian
+#         # ...approximate steiner with local shortest path dists.
+#         subset_dists = adjusted_forest_dists(subset_dists, beta=beta)
+#     tree = sparse.COO.from_scipy_sparse(minimum_spanning_tree(subset_dists))
+#     tree_E = sq_ij_e(tree.shape[0], tree.coords)
+#     return all_E[tree_E]
 
 
-def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta=0.001):
+def _pursue_tree_basis(edge_candidates, edge_weights, edge_priors=False, beta=0.001):
+
+    if edge_candidates.size == 0:
+        # i.e. 0 or 1 nodes were activated (no relationships possible)
+        return edge_candidates
+    else:
+        # get MST/steiner estimate for true edge activations
+        subset_dists = flat2sq(edge_weights)
+        if edge_priors:
+            # i.e. weights are edge probabilities, not node distances
+            # ...we are recieving an estimate for the Graph Laplacian
+            # need to approximate steiner with local shortest path dists.
+            subset_dists = adjusted_forest_dists(subset_dists, beta=beta)
+        tree_edges = sq2flat(minimum_spanning_tree(subset_dists)).coords[0]
+
+        return edge_candidates[tree_edges]
+
+
+def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta=0.001, n_jobs=None):
     """resample with a kernel bootstrap on MSTs in a manifold"""
+    N_obs = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if (prior_dists is None) and (not edge_priors):
-        prior_dists = -np.log(ochiai(X, pseudocts=0.5))
-
+        prior_kern = ochiai(N_obs, pseudocts=0.5)
+        prior_dists = sparse.COO(
+            data=-np.log(prior_kern.data),
+            coords=prior_kern.coords,
+            shape=prior_kern.shape,
+        )
     elif edge_priors:
         # TODO: enforce laplacian!
         # assert np.allclose(prior_dists.sum(axis=0),0)
         pass
-        
-    # N_obs = X.toarray() if issparse(X) else X
-    N_obs = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
-    N_activations = csr_rows_idx(N_obs.tocsr())
-    E_activations = [
-        _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
-        if nodes.size>0 else nodes for nodes in N_activations
-    ]
 
-    E_coords = np.vstack((
-        np.repeat(np.arange(N_obs.shape[0]), np.array([len(e) for e in E_activations])),
-        np.concatenate(E_activations),
-    ))
+    prior_weights = sq2flat(prior_dists)
+
+    if n_jobs is None:
+        E_activations = [
+            _pursue_tree_basis(
+                edges, prior_weights[edges],
+                edge_priors=edge_priors, beta=beta
+            ) for edges in binary_feature_edge_cliques(N_obs)
+        ]
+
+    else:
+        E_activations = Parallel(n_jobs=n_jobs, backend="loky")(
+            delayed(_pursue_tree_basis)(edges, prior_weights[edges])
+            for edges in binary_feature_edge_cliques(N_obs)
+        )
+
+    # E_activations = [
+    #     _pursue_tree_basis(prior_dists, nodes, edge_priors=edge_priors, beta=beta)
+    #     if nodes.size>0 else nodes for nodes in N_activations
+    # ]
+
+    E_coords = np.vstack(
+        (
+            np.repeat(
+                np.arange(N_obs.shape[0]), np.array([len(e) for e in E_activations])
+            ),
+            np.concatenate(E_activations),
+        )
+    )
     n = X.shape[1]
     m = n * (n - 1) // 2
-    return coo_array(
-        sparse.COO(E_coords, data=1, shape=(X.shape[0], m)).to_scipy_sparse()
-    )
+    return sparse.COO(E_coords, data=1, shape=(X.shape[0], m))
 
     # E_obs = coo_array(
     #     [
@@ -470,8 +530,7 @@ def _spanning_forests_obs_bootstrap(X, prior_dists=None, edge_priors=False, beta
     # return E_obs
 
 
-
-def forest_pursuit_cts(X: FeatMat, prior_dists:SimsMat|None=None) -> SimsMat:
+def forest_pursuit_cts(X: FeatMat, prior_dists: SimsMat | None = None, beta=0.001, n_jobs=None) -> SimsMat:
     """Point estimate for number of actual edge activations, rather than
     node-node co-occurrences.
     Uses the Empirical Bayes estimate of the Spanning Forest Density
@@ -485,17 +544,19 @@ def forest_pursuit_cts(X: FeatMat, prior_dists:SimsMat|None=None) -> SimsMat:
     """
 
     # est_dists = -np.log(prior(X, pseudocts=pseudocts))
-    e_obs = _spanning_forests_obs_bootstrap(X, prior_dists=prior_dists)
-    return _sq(e_obs.sum(axis=0))
+    e_obs = _spanning_forests_obs_bootstrap(X, prior_dists=prior_dists, beta=beta, n_jobs=n_jobs)
+    return flat2sq(e_obs.sum(axis=0))
+
 
 def expected_forest_maximization(
     X: FeatMat,
-    prior_struct:SimsMat=None,
-    beta:float=0.001,
-    eps:float=1e-5,
-    max_iter:int=100,
-    verbose:bool=False,
-) -> SimsMat:
+    prior_struct: SimsMat|None = None,
+    beta: float = 0.001,
+    eps: float = 1e-5,
+    max_iter: int = 100,
+    verbose: bool = False,
+    n_jobs=None,
+) -> SimsMat|(SimsMat,int):
     """Expectation Maximization Scheme to recover structure.
 
     Shown to have minor accuracy improvement over vanilla Forest Pursuit,
@@ -503,44 +564,48 @@ def expected_forest_maximization(
     alternating-minimization scheme to jointly estimate edge activation
     probabilities, _and_ network structure.
 
-    For more detail, see [Expected Forest Maximization](https://dissertation.rtbs.dev/content/part2/2-06-latent-forest-alloc.html#expected-forest-maximization). 
-    
+    For more detail, see [Expected Forest Maximization](https://dissertation.rtbs.dev/content/part2/2-06-latent-forest-alloc.html#expected-forest-maximization).
+
     Args:
-      X: FeatMat: 
+      X: FeatMat:
       prior_struct:
-      beta:  
-      eps:  
-      max_iter: 
-      verbose:  
+      beta:
+      eps:
+      max_iter:
+      verbose:
 
     Returns:
 
     """
     if prior_struct is None:
-        e_prob = _sq(forest_pursuit_edge(X))
+        e_prob = sq2flat(forest_pursuit_edge(X)).todense()
         prior_struct = _norm_diag(edge_weights_to_laplacian(e_prob))
 
-    uv_cts = _sq(_gram(X,X))    
-    
-    diff, it = 1.,0
+    uv_cts = sq2flat(_gram(X,X))
 
-    while (diff>eps) and (it<max_iter):
-        it+=1
-        e_cts = _spanning_forests_obs_bootstrap(X, prior_dists=prior_struct, edge_priors=True, beta=beta).sum(axis=0)
-        e_prob_new = e_prob + (e_cts - e_prob*uv_cts)/(uv_cts+1)  # posterior for Beta(a, 1-a)
+    diff, it = 1.0, 0
+    # pseudct = pseudocount("zero-sum")
+    while (diff > eps) and (it < max_iter):
+        it += 1
+        e_cts = _spanning_forests_obs_bootstrap(
+            X, prior_dists=prior_struct, edge_priors=True, beta=beta, n_jobs=n_jobs
+        ).sum(axis=0).todense()
+        e_prob_new = e_prob + (e_cts - e_prob * uv_cts) / (
+            uv_cts + 1
+        )  # posterior for Beta(a, 1-a)
         diff = np.max(np.abs(e_prob_new - e_prob))
         e_prob = e_prob_new
         prior_struct = _norm_diag(edge_weights_to_laplacian(e_prob))
 
     if verbose:
-        return _sq(e_prob), it
+        return flat2sq(e_prob), it
     else:
-        return _sq(e_prob)
-        
+        return flat2sq(e_prob)
+
 
 def forest_pursuit_edge(
-    X: FeatMat, prior_dists:SimsMat|None=None, pseudocts: PsdCts = "min-connect"
-) -> SimsMat:
+    X: FeatMat, prior_dists: SimsMat | None = None, pseudocts: PsdCts = "min-connect"
+, n_jobs=None, beta=0.001) -> SimsMat:
     """point estimate for edge-activation probability, conditional on
     both nodes being a priori activated.
     Uses the Spanning Forest Density non-parametric estimator
@@ -550,26 +615,29 @@ def forest_pursuit_edge(
       prior_dists:  default uses `-log(cos)`
       pseudocts:   additive smoothing parameter
 
-    Returns: probability of edge traversal given a co-occurrence. 
+    Returns: probability of edge traversal given a co-occurrence.
     """
-    e_cts = _sq(forest_pursuit_cts(X, prior_dists=prior_dists))
-    uv_cts = _sq(_gram(X, X))
+    Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
+    e_cts = sq2flat(forest_pursuit_cts(Xsp, prior_dists=prior_dists, n_jobs=n_jobs, beta=beta))
+    uv_cts = sq2flat(Xsp.T@Xsp)
     # e_prob = (e_cts + pseudocts) / (uv_cts + 2 * pseudocts)
     e_prob = pseudocount(pseudocts)(e_cts, uv_cts)
-    return _sq(e_prob)
+    return flat2sq(e_prob)
 
 
 def forest_pursuit_interaction(
     X: FeatMat,
-    prior_dists:SimsMat|None=None,
+    prior_dists: SimsMat | None = None,
     precalc_prob: SimsMat | None = None,
     pseudocts: PsdCts = "min-connect",
+    n_jobs=None,
+    beta=0.001,
 ) -> SimsMat:
     """point estimate for probability of observing an edge traversal,
     using the Spanning Forest Density non-parametric estimator. Weights conditional
-    edge traversal probability by the base co-occurrence probability. 
+    edge traversal probability by the base co-occurrence probability.
 
-    If you have already calculated forest_pursuit_edge, you can pass it as precalc_prob. 
+    If you have already calculated forest_pursuit_edge, you can pass it as precalc_prob.
 
     Args:
       X: feature matrix
@@ -581,34 +649,38 @@ def forest_pursuit_interaction(
 
     """
     # TODO: check X and precalc_cts have correct dim
+    
+    Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
     if not precalc_prob:
-        e_prob = _sq(
-            forest_pursuit_edge(X, prior_dists=prior_dists, pseudocts=pseudocts)
+        e_prob = sq2flat(
+            forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts, n_jobs=n_jobs, beta=beta)
         )
     else:
-        e_prob = _sq(precalc_prob)
-    uv_prob = _sq(coocur_prob(X, pseudocts=pseudocts))
+        e_prob = sq2flat(precalc_prob)
+    uv_prob = sq2flat(coocur_prob(Xsp, pseudocts=pseudocts))
     e_margP = e_prob * uv_prob
-    return _sq(e_margP)
+    return flat2sq(e_margP)
 
 
 def forest_pursuit(
     X: FeatMat,
-    mode:FPopts="edge-prob",
-    pseudocts:PsdCts = "min-connect",
-    prior_dists:SimsMat|None=None,
-    **efm_kws    
-)->SimsMat:
+    mode: FPopts = "edge-prob",
+    pseudocts: PsdCts = "min-connect",
+    prior_dists: SimsMat | None = None,
+    n_jobs=None,
+    beta=0.001,
+    **efm_kws,
+) -> SimsMat:
     """Structure estimation under spreading-process assumption [(Sexton, 2025)](https://doi.org/10.13016/o252-lfmi)
 
     This is the original implementation, as demonstrated in
     [Rachael Sextons's dissertation (2025)](https://dissertation.rtbs.dev/).
     For more details on how it works, see [Approximate Recovery in Near-linear Time by Forest Pursuit](https://dissertation.rtbs.dev/content/part2/2-05-forest-pursuit.html), and subsequent chapters for modifications and
-    descriptions of the "modes" presented here. 
+    descriptions of the "modes" presented here.
 
     Which mode you select determines how you will interpret the resulting
     association scores.
-     
+
     - If "edge-prob", FP will estimate the probability of an edge
       being activated, _given_ you know the two nodes it connects
       are known to be active. This is a formalization of what it means
@@ -624,7 +696,7 @@ def forest_pursuit(
       See [expected_forest_maximization][affinis.associations.expected_forest_maximization].
     - If "interaction", re-weight the "edge-prob" values to be the
       likelihood of observing an edge activation, _given_ the
-      observed data (useful e.g. for bayesian inference). 
+      observed data (useful e.g. for bayesian inference).
       See [forest_pursuit_interaction][affinis.associations.forest_pursuit_interaction].
 
     Args:
@@ -634,18 +706,20 @@ def forest_pursuit(
       prior_dists: previously calculated inter-node distances (default:`-log(cos)`)
       **efm_kws: kwargs to pass to
           [expected_forest_maximization][affinis.associations.expected_forest_maximization]
-          if that mode is selected. 
+          if that mode is selected.
 
     """
+    Xsp= sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
+
     match mode:
-        case 'edge-prob':
-            return forest_pursuit_edge(X, prior_dists=prior_dists, pseudocts=pseudocts)
-        case 'counts':
-            return forest_pursuit_cts(X, prior_dists=prior_dists)
-        case 'forest-max':
-            return expected_forest_maximization(X, **efm_kws)
-        case 'interaction':
-            return forest_pursuit_interaction(X, prior_dists, pseudocts=pseudocts)
+        case "edge-prob":
+            return forest_pursuit_edge(Xsp, prior_dists=prior_dists, pseudocts=pseudocts,beta=beta, n_jobs=n_jobs)
+        case "counts":
+            return forest_pursuit_cts(Xsp, prior_dists=prior_dists,beta=beta, n_jobs=n_jobs)
+        case "forest-max":
+            return expected_forest_maximization(Xsp,beta=beta, n_jobs=n_jobs, **efm_kws)
+        case "interaction":
+            return forest_pursuit_interaction(Xsp, prior_dists, pseudocts=pseudocts,beta=beta, n_jobs=n_jobs)
 
 
 def _forest_pursuit_normdegs(X, prior_dists=None, pseudocts="min-connect"):
