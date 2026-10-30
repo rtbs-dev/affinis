@@ -1,6 +1,6 @@
 [project]
 name = "affinis"
-version = "0.7.6"
+version = "0.8.1"
 description = "Tools for inferring relations from binary co-occurrence data"
 authors = [{ name = "Rachael Sexton", email = "rtbs@nist.gov" }]
 requires-python = ">=3.11"

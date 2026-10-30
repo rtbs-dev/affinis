@@ -110,17 +110,51 @@ def sim_papers(n_weeks, L, jumps_param=0.1, rng=np.random.default_rng(2)):
 L_df = pd.DataFrame(L, columns=author_idx, index=author_idx)
 
 
-X = COO.from_numpy(np.vstack([paper for paper in sim_papers(52,L_df, 0.07)]))
+X = COO.from_numpy(np.vstack([paper for paper in sim_papers(52,L_df, 0.07)])).astype(bool)
 Xdf = pd.DataFrame(X.todense(), columns=author_idx)
 hinton(X)
 plt.xlabel('author')
 plt.ylabel('publication');
 ```
 
+```python
+X.data = np.random.choice(np.arange(1,10), X.data.size)
+X.data
+```
+
 ## Author relationship recovery
 
 Now let's attempt to recover as many true relationships as we can for this network, using only the paper co-authorship data we generated. 
 To perform a thresholding of edge weights relative to the method we pick, we can use the [`threshold_connected`][affinis.filter.threshold_connected] rule. 
+
+```python
+psct ='min-connect'
+# psct=0
+baselines = {
+    'Chow Liu Tree': aff.chow_liu(X, pseudocts=psct),
+    'Forest Pursuit': aff.forest_pursuit(X,pseudocts=psct),  
+    'HSS': aff.high_salience_skeleton(X, pseudocts=psct),
+    'Co-occurrence Prob.': aff.coocur_prob(X, pseudocts=psct),
+    'Hyperbolic Proj.': aff.hyperbolic_project(X),
+    # 'odds-ratio': aff.odds_ratio(X, pseudocts=psct),
+    'doubly-stochastic':aff.doubly_stochastic_filter(X, reg=0.1,pseudocts=psct),
+}
+
+f,axs = plt.subplots(nrows=2, ncols=3, figsize=(8,5))
+
+for n, (lab, Aest) in enumerate(baselines.items()): 
+    ax = axs.flatten()[n]
+    # ax.imshow(Aest)
+    print(lab)
+    hinton(threshold_connected(Aest), ax=ax)
+    # hinton(Aest, ax=ax)
+    hinton(-A, marker='.', ax=ax)
+    ax.set_xlabel(lab)
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+
+plt.savefig(imgpath/'collab-recover.webp')
+```
 
 ```python
 psct ='min-connect'

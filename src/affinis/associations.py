@@ -175,6 +175,11 @@ def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Additive smoothing is applied via the initial calculation of
     conditional probabilities.
 
+    NB: This mutual information function currently assumes single-trial Bernoulli,
+    so a matrix of "counts" (e.g. word counts) will be forced into binary occurrences!
+    This is in line with common practice, though future work could assume integer-valued
+    distributions. 
+
     Args:
         X: feature matrix
         pseudocts:  additive smoothing parameter
@@ -182,10 +187,11 @@ def mutual_information(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Returns:
 
     """
-    Pxy = _contingency_prob(X, pseudocts=pseudocts)
+    B = X.astype(bool).astype(int) # only existence, not counts!
+    Pxy = _contingency_prob(B, pseudocts=pseudocts)
 
     # Pxy = np.vstack([sq(i) for i in cond_table])
-    yes, no = _marginal_prob(X)
+    yes, no = _marginal_prob(B)
     # TODO had to hard-code 0.5 for now :(, pseudocts=pseudocts)
 
     # print(Pxy.sum(axis=1))
@@ -292,7 +298,7 @@ def ochiai(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
     Returns: square cosine similarity matrix (incl. ones in the diagonal)
 
     """
-    G = X.T @ X
+    G = _gram(X,X)
     return _norm_diag(G, psdcts=pseudocts)
     # I = np.eye(X.shape[-1])
     # co_occurs = sq2flat(X.T@X)  # + pseudocts
@@ -329,10 +335,10 @@ def hyperbolic_project(X: FeatMat, pseudocts: PsdCts = 0.5) -> SimsMat:
       X: feature matrix
 
     """
-
+    B = X.astype(int)
     # reweight = _safe_div(X.T, (X.sum(axis=1) - 1)).T  # right-stochastic bipartite
-    reweight = X.T@sparse.diagonalize(np.ma.divide(1,(X.sum(axis=1)-1).todense()).filled(0))
-    return reweight@X
+    reweight = B.T@sparse.diagonalize(np.ma.divide(1,(B.sum(axis=1)-1).todense()).filled(0))
+    return reweight@B
 
 
 def resource_project(
@@ -364,17 +370,17 @@ def resource_project(
 
     """
     # psdct_func = pseudocount(pseudocts)
-    
-    Di = sparse.diagonalize(np.ma.divide(1,X.sum(axis=1).todense()).filled(0))
+    B = X.astype(int)
+    Di = sparse.diagonalize(np.ma.divide(1,B.sum(axis=1).todense()).filled(0))
     # fwd = _safe_div(X.T, X.sum(axis=1)).T  # right-stochastic bipartite
     # bwd = psdct_func(X, X.sum(axis=0))
 
     # P = _gram(((X.T) / (X.sum(axis=1))).T, ((X) / (X.sum(axis=0))))
     # num = fwd@X  # project back
     # den = np.multiply.outer(X.sum(axis=0), np.ones(X.shape[1]))
-    Dj= sparse.diagonalize(np.ma.divide(1,X.sum(axis=0).todense()).filled(0))
+    Dj= sparse.diagonalize(np.ma.divide(1,B.sum(axis=0).todense()).filled(0))
     # P = num@den
-    P = X.T@Di@X@Dj
+    P = B.T@Di@B@Dj
     return sym_func(P, P.T)
 
 
@@ -617,9 +623,9 @@ def forest_pursuit_edge(
 
     Returns: probability of edge traversal given a co-occurrence.
     """
-    Xsp = sparse.COO.from_scipy_sparse(X) if issparse(X) else sparse.COO(X)
+    Xsp = sparse.COO.from_scipy_sparse(X).astype(int) if issparse(X) else sparse.COO(X).astype(int)
     e_cts = sq2flat(forest_pursuit_cts(Xsp, prior_dists=prior_dists, n_jobs=n_jobs, beta=beta))
-    uv_cts = sq2flat(Xsp.T@Xsp)
+    uv_cts = sq2flat(_gram(Xsp,Xsp))
     # e_prob = (e_cts + pseudocts) / (uv_cts + 2 * pseudocts)
     e_prob = pseudocount(pseudocts)(e_cts, uv_cts)
     return flat2sq(e_prob)
